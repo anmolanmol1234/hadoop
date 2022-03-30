@@ -42,6 +42,7 @@ public final class FileSystemConfigurations {
   public static final int DEFAULT_MAX_BACKOFF_INTERVAL = 30 * 1000;  // 30s
   public static final int DEFAULT_BACKOFF_INTERVAL = 3 * 1000;  // 3s
   public static final int DEFAULT_MAX_RETRY_ATTEMPTS = 30;
+  public static final long DEFAULT_MAX_LEASE_RETRY_TIME = 50L;
   public static final int DEFAULT_CUSTOM_TOKEN_FETCH_RETRY_COUNT = 3;
 
   // Retry parameter defaults.
@@ -82,6 +83,8 @@ public final class FileSystemConfigurations {
   public static final boolean DEFAULT_FS_AZURE_ENABLE_MKDIR_OVERWRITE = true;
   public static final String DEFAULT_FS_AZURE_APPEND_BLOB_DIRECTORIES = "";
   public static final String DEFAULT_FS_AZURE_INFINITE_LEASE_DIRECTORIES = "";
+  public static final boolean DEFAULT_FS_AZURE_WRITE_ENFORCE_LEASE = false;
+  public static final int DEFAULT_FS_AZURE_WRITE_LEASE_DURATION = 60;
   public static final int DEFAULT_LEASE_THREADS = 0;
   public static final int MIN_LEASE_THREADS = 0;
   public static final int DEFAULT_LEASE_DURATION = -1;

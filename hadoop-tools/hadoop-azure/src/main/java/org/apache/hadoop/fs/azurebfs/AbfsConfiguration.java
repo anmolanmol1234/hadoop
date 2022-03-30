@@ -146,6 +146,11 @@ public class AbfsConfiguration{
       DefaultValue = DEFAULT_MAX_RETRY_ATTEMPTS)
   private int maxIoRetries;
 
+  @LongConfigurationValidatorAnnotation(ConfigurationKey = AZURE_MAX_LEASE_RETRY_TIME,
+          MinValue = 0L,
+          DefaultValue = DEFAULT_MAX_LEASE_RETRY_TIME)
+  private long maxLeaseRetryTime;
+
   @IntegerConfigurationValidatorAnnotation(ConfigurationKey = AZURE_CUSTOM_TOKEN_FETCH_RETRY_COUNT,
       MinValue = 0,
       DefaultValue = DEFAULT_CUSTOM_TOKEN_FETCH_RETRY_COUNT)
@@ -216,6 +221,16 @@ public class AbfsConfiguration{
   @StringConfigurationValidatorAnnotation(ConfigurationKey = FS_AZURE_APPEND_BLOB_KEY,
       DefaultValue = DEFAULT_FS_AZURE_APPEND_BLOB_DIRECTORIES)
   private String azureAppendBlobDirs;
+
+  @BooleanConfigurationValidatorAnnotation(ConfigurationKey = FS_AZURE_WRITE_ENFORCE_LEASE,
+          DefaultValue = DEFAULT_FS_AZURE_WRITE_ENFORCE_LEASE)
+  private boolean azureWriteEnforceLease;
+
+  @IntegerConfigurationValidatorAnnotation(ConfigurationKey = FS_AZURE_WRITE_LEASE_DURATION,
+          MinValue = MIN_LEASE_DURATION,
+          MaxValue = MAX_LEASE_DURATION,
+          DefaultValue = DEFAULT_FS_AZURE_WRITE_LEASE_DURATION)
+  private int azureWriteLeaseDuration;
 
   @StringConfigurationValidatorAnnotation(ConfigurationKey = FS_AZURE_INFINITE_LEASE_KEY,
       DefaultValue = DEFAULT_FS_AZURE_INFINITE_LEASE_DIRECTORIES)
@@ -632,6 +647,10 @@ public class AbfsConfiguration{
     return this.maxIoRetries;
   }
 
+  public long getMaxLeaseRetryTime() {
+    return this.maxLeaseRetryTime;
+  }
+
   public int getCustomTokenFetchRetryCount() {
     return this.customTokenFetchRetryCount;
   }
@@ -682,6 +701,14 @@ public class AbfsConfiguration{
 
   public String getAppendBlobDirs() {
     return this.azureAppendBlobDirs;
+  }
+
+  public boolean isLeaseEnforced() {
+    return this.azureWriteEnforceLease;
+  }
+
+  public int getWriteLeaseDuration() {
+    return this.azureWriteLeaseDuration;
   }
 
   public String getAzureInfiniteLeaseDirs() {
