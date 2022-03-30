@@ -28,6 +28,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -38,6 +39,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.classification.VisibleForTesting;
+import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AbfsRestOperationException;
 import org.apache.hadoop.util.Preconditions;
 import org.apache.hadoop.thirdparty.com.google.common.base.Strings;
 import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.FutureCallback;
@@ -67,6 +69,8 @@ import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.security.ssl.DelegatingSSLSocketFactory;
 import org.apache.hadoop.util.concurrent.HadoopExecutors;
 
+import static java.net.HttpURLConnection.HTTP_CONFLICT;
+import static java.net.HttpURLConnection.HTTP_PRECON_FAILED;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.*;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.DEFAULT_DELETE_CONSIDERED_IDEMPOTENT;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.SERVER_SIDE_ENCRYPTION_ALGORITHM;
@@ -82,8 +86,9 @@ public class AbfsClient implements Closeable {
 
   private final URL baseUrl;
   private final SharedKeyCredentials sharedKeyCredentials;
-  private final String xMsVersion = "2019-12-12";
+  private final String xMsVersion = "2020-08-04";
   private final ExponentialRetryPolicy retryPolicy;
+  private final LeaseRetryPolicy leaseRetryPolicy;
   private final String filesystem;
   private final AbfsConfiguration abfsConfiguration;
   private final String userAgent;
@@ -109,6 +114,7 @@ public class AbfsClient implements Closeable {
     this.filesystem = baseUrlString.substring(baseUrlString.lastIndexOf(FORWARD_SLASH) + 1);
     this.abfsConfiguration = abfsConfiguration;
     this.retryPolicy = abfsClientContext.getExponentialRetryPolicy();
+    this.leaseRetryPolicy = abfsClientContext.getLeaseRetryPolicy();
     this.accountName = abfsConfiguration.getAccountName().substring(0, abfsConfiguration.getAccountName().indexOf(AbfsHttpConstants.DOT));
     this.authType = abfsConfiguration.getAuthType(accountName);
 
@@ -199,7 +205,11 @@ public class AbfsClient implements Closeable {
     return abfsPerfTracker;
   }
 
-  ExponentialRetryPolicy getRetryPolicy() {
+  ExponentialRetryPolicy getRetryPolicy(AbfsRestOperationType operationType) {
+    if(operationType == AbfsRestOperationType.Append
+            || operationType == AbfsRestOperationType.Flush){
+      return leaseRetryPolicy;
+    }
     return retryPolicy;
   }
 
@@ -249,7 +259,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_PUT,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -273,7 +283,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_PUT,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -298,7 +308,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_GET,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -315,7 +325,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_HEAD,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -332,7 +342,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_DELETE,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -340,7 +350,7 @@ public class AbfsClient implements Closeable {
   public AbfsRestOperation createPath(final String path, final boolean isFile, final boolean overwrite,
                                       final String permission, final String umask,
                                       final boolean isAppendBlob, final String eTag,
-                                      TracingContext tracingContext) throws AzureBlobFileSystemException {
+                                      TracingContext tracingContext, AbfsLease lease) throws AzureBlobFileSystemException {
     final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
     if (isFile) {
       addCustomerProvidedKeyHeaders(requestHeaders);
@@ -361,6 +371,10 @@ public class AbfsClient implements Closeable {
       requestHeaders.add(new AbfsHttpHeader(HttpHeaderConfigurations.IF_MATCH, eTag));
     }
 
+    if(AbfsLease.isValidLease(lease) && isFile){
+      lease.addHeaders(null, null, String.valueOf(abfsConfiguration.getWriteLeaseDuration()), requestHeaders);
+    }
+
     final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
     abfsUriQueryBuilder.addQuery(QUERY_PARAM_RESOURCE, isFile ? FILE : DIRECTORY);
     if (isAppendBlob) {
@@ -378,7 +392,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_PUT,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     try {
       op.execute(tracingContext);
     } catch (AzureBlobFileSystemException ex) {
@@ -386,7 +400,7 @@ public class AbfsClient implements Closeable {
       if (!op.hasResult()) {
         throw ex;
       }
-      if (!isFile && op.getResult().getStatusCode() == HttpURLConnection.HTTP_CONFLICT) {
+      if (!isFile && op.getResult().getStatusCode() == HTTP_CONFLICT) {
         String existingResource =
             op.getResult().getResponseHeader(X_MS_EXISTING_RESOURCE_TYPE);
         if (existingResource != null && existingResource.equals(DIRECTORY)) {
@@ -413,7 +427,7 @@ public class AbfsClient implements Closeable {
         this,
         HTTP_METHOD_POST,
         url,
-        requestHeaders);
+        requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -433,7 +447,7 @@ public class AbfsClient implements Closeable {
         this,
         HTTP_METHOD_POST,
         url,
-        requestHeaders);
+        requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -453,7 +467,7 @@ public class AbfsClient implements Closeable {
         this,
         HTTP_METHOD_POST,
         url,
-        requestHeaders);
+        requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -473,7 +487,7 @@ public class AbfsClient implements Closeable {
         this,
         HTTP_METHOD_POST,
         url,
-        requestHeaders);
+        requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -504,7 +518,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_PUT,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     // no attempt at recovery using timestamps as it was not reliable.
     op.execute(tracingContext);
     return op;
@@ -517,10 +531,10 @@ public class AbfsClient implements Closeable {
     addCustomerProvidedKeyHeaders(requestHeaders);
     // JDK7 does not support PATCH, so to workaround the issue we will use
     // PUT and specify the real method in the X-Http-Method-Override header.
-    requestHeaders.add(new AbfsHttpHeader(X_HTTP_METHOD_OVERRIDE,
-        HTTP_METHOD_PATCH));
-    if (reqParams.getLeaseId() != null) {
-      requestHeaders.add(new AbfsHttpHeader(X_MS_LEASE_ID, reqParams.getLeaseId()));
+    requestHeaders.add(new AbfsHttpHeader(X_HTTP_METHOD_OVERRIDE, HTTP_METHOD_PATCH));
+    AbfsLease lease = reqParams.getLease();
+    if (AbfsLease.isValidLease(lease)) {
+        lease.addHeaders(reqParams, null, String.valueOf(abfsConfiguration.getWriteLeaseDuration()), requestHeaders);
     }
 
     final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
@@ -549,11 +563,14 @@ public class AbfsClient implements Closeable {
         buffer,
         reqParams.getoffset(),
         reqParams.getLength(),
-        sasTokenForReuse);
+        sasTokenForReuse, Instant.now());
     try {
       op.execute(tracingContext);
     } catch (AzureBlobFileSystemException e) {
-      // If we have no HTTP response, throw the original exception.
+      if (!lease.isInfiniteLease && lease.checkLeaseStatus(op)) {
+          reqParams.getLease().setAcquireNewLease(false);
+          return this.append(path, buffer, reqParams, cachedSasToken, tracingContext);
+      }
       if (!op.hasResult()) {
         throw e;
       }
@@ -569,7 +586,7 @@ public class AbfsClient implements Closeable {
             buffer,
             reqParams.getoffset(),
             reqParams.getLength(),
-            sasTokenForReuse);
+            sasTokenForReuse, Instant.now());
         successOp.hardSetResult(HttpURLConnection.HTTP_OK);
         return successOp;
       }
@@ -603,7 +620,7 @@ public class AbfsClient implements Closeable {
 
   public AbfsRestOperation flush(final String path, final long position,
       boolean retainUncommittedData, boolean isClose,
-      final String cachedSasToken, final String leaseId,
+      final String cachedSasToken, AbfsLease lease,
       TracingContext tracingContext) throws AzureBlobFileSystemException {
     final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
     addCustomerProvidedKeyHeaders(requestHeaders);
@@ -611,10 +628,9 @@ public class AbfsClient implements Closeable {
     // PUT and specify the real method in the X-Http-Method-Override header.
     requestHeaders.add(new AbfsHttpHeader(X_HTTP_METHOD_OVERRIDE,
             HTTP_METHOD_PATCH));
-    if (leaseId != null) {
-      requestHeaders.add(new AbfsHttpHeader(X_MS_LEASE_ID, leaseId));
+    if (AbfsLease.isValidLease(lease)) {
+      lease.addHeaders(null, isClose, String.valueOf(abfsConfiguration.getWriteLeaseDuration()), requestHeaders);
     }
-
     final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
     abfsUriQueryBuilder.addQuery(QUERY_PARAM_ACTION, FLUSH_ACTION);
     abfsUriQueryBuilder.addQuery(QUERY_PARAM_POSITION, Long.toString(position));
@@ -630,8 +646,17 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_PUT,
             url,
-            requestHeaders, sasTokenForReuse);
-    op.execute(tracingContext);
+            requestHeaders, sasTokenForReuse, Instant.now());
+    try {
+      op.execute(tracingContext);
+    } catch (AzureBlobFileSystemException e) {
+        if (!lease.isInfiniteLease() && lease.checkLeaseStatus(op)) {
+          lease.setAcquireNewLease(false);
+          return this.flush(path, position, retainUncommittedData, isClose,
+              cachedSasToken, lease, tracingContext);
+        }
+      throw e;
+    }
     return op;
   }
 
@@ -657,7 +682,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_PUT,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -686,7 +711,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_HEAD,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -714,7 +739,7 @@ public class AbfsClient implements Closeable {
             requestHeaders,
             buffer,
             bufferOffset,
-            bufferLength, sasTokenForReuse);
+            bufferLength, sasTokenForReuse, Instant.now());
     op.execute(tracingContext);
 
     return op;
@@ -737,7 +762,7 @@ public class AbfsClient implements Closeable {
             this,
             HTTP_METHOD_DELETE,
             url,
-            requestHeaders);
+            requestHeaders, Instant.now());
     try {
     op.execute(tracingContext);
     } catch (AzureBlobFileSystemException e) {
@@ -786,7 +811,7 @@ public class AbfsClient implements Closeable {
           this,
           HTTP_METHOD_DELETE,
           op.getUrl(),
-          op.getRequestHeaders());
+          op.getRequestHeaders(), Instant.now());
       successOp.hardSetResult(HttpURLConnection.HTTP_OK);
       LOG.debug("Returning success response from delete idempotency logic");
       return successOp;
@@ -821,7 +846,7 @@ public class AbfsClient implements Closeable {
         this,
         AbfsHttpConstants.HTTP_METHOD_PUT,
         url,
-        requestHeaders);
+        requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -847,7 +872,7 @@ public class AbfsClient implements Closeable {
         this,
         AbfsHttpConstants.HTTP_METHOD_PUT,
         url,
-        requestHeaders);
+        requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -882,7 +907,7 @@ public class AbfsClient implements Closeable {
         this,
         AbfsHttpConstants.HTTP_METHOD_PUT,
         url,
-        requestHeaders);
+        requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -907,7 +932,7 @@ public class AbfsClient implements Closeable {
         this,
         AbfsHttpConstants.HTTP_METHOD_HEAD,
         url,
-        requestHeaders);
+        requestHeaders, Instant.now());
     op.execute(tracingContext);
     return op;
   }
@@ -931,7 +956,7 @@ public class AbfsClient implements Closeable {
     URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
     AbfsRestOperation op = new AbfsRestOperation(
         AbfsRestOperationType.CheckAccess, this,
-        AbfsHttpConstants.HTTP_METHOD_HEAD, url, createDefaultHeaders());
+        AbfsHttpConstants.HTTP_METHOD_HEAD, url, createDefaultHeaders(), Instant.now());
     op.execute(tracingContext);
     return op;
   }

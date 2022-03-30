@@ -25,6 +25,7 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
 import java.util.Hashtable;
 import java.util.Map;
@@ -318,7 +319,7 @@ public final class AzureADAuthenticator {
       }
       succeeded = ((httperror == 0) && (ex == null));
       shouldRetry = !succeeded && isRecoverableFailure
-          && tokenFetchRetryPolicy.shouldRetry(retryCount, httperror);
+          && tokenFetchRetryPolicy.shouldRetry(retryCount, httperror, null, null, 0L);
       retryCount++;
       if (shouldRetry) {
         LOG.debug("Retrying getTokenSingleCall. RetryCount = {}", retryCount);

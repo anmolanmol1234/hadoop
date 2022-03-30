@@ -107,7 +107,7 @@ public class TestExponentialRetryPolicy extends AbstractAbfsIntegrationTest {
     while (localRetryCount < abfsConfig.getMaxIoRetries()) {
       Assert.assertTrue(
           "Retry should be allowed when retryCount less than max count configured.",
-          retryPolicy.shouldRetry(localRetryCount, -1));
+          retryPolicy.shouldRetry(localRetryCount, -1, null, null, 0L));
       localRetryCount++;
     }
 

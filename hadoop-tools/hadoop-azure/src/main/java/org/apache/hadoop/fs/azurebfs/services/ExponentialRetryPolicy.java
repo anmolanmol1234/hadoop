@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.azurebfs.services;
 import java.util.Random;
 import java.net.HttpURLConnection;
 
+import java.util.List;
 import org.apache.hadoop.fs.azurebfs.AbfsConfiguration;
 import org.apache.hadoop.classification.VisibleForTesting;
 
@@ -45,6 +46,8 @@ public class ExponentialRetryPolicy {
    * delay between retries.
    */
   private static final int DEFAULT_MIN_BACKOFF = 1000 * 3;
+
+  private static final int DEFAULT_IO_RETRIES = 30;
 
   /**
    *  The minimum random ratio used for delay interval calculation.
@@ -82,12 +85,24 @@ public class ExponentialRetryPolicy {
   private final int retryCount;
 
   /**
+   * The maximum lease Retry Time
+   */
+  private long maxLeaseRetryTime;
+
+  /**
    * Initializes a new instance of the {@link ExponentialRetryPolicy} class.
    */
   public ExponentialRetryPolicy(final int maxIoRetries) {
-
     this(maxIoRetries, DEFAULT_MIN_BACKOFF, DEFAULT_MAX_BACKOFF,
         DEFAULT_CLIENT_BACKOFF);
+  }
+
+  /**
+   * Initializes a new instance of the {@link ExponentialRetryPolicy} class.
+   */
+  public ExponentialRetryPolicy(final long maxLeaseRetryTime) {
+    this(DEFAULT_IO_RETRIES, DEFAULT_MIN_BACKOFF, DEFAULT_MAX_BACKOFF,
+            DEFAULT_CLIENT_BACKOFF, maxLeaseRetryTime);
   }
 
   /**
@@ -97,7 +112,7 @@ public class ExponentialRetryPolicy {
    */
   public ExponentialRetryPolicy(AbfsConfiguration conf) {
     this(conf.getMaxIoRetries(), conf.getMinBackoffIntervalMilliseconds(), conf.getMaxBackoffIntervalMilliseconds(),
-        conf.getBackoffIntervalMilliseconds());
+        conf.getBackoffIntervalMilliseconds(), conf.getMaxLeaseRetryTime());
   }
 
   /**
@@ -116,6 +131,12 @@ public class ExponentialRetryPolicy {
     this.deltaBackoff = deltaBackoff;
   }
 
+  public ExponentialRetryPolicy(final int retryCount, final int minBackoff, final int maxBackoff, final int deltaBackoff,
+                                final long maxLeaseRetryTime) {
+    this(retryCount, minBackoff, maxBackoff, deltaBackoff);
+    this.maxLeaseRetryTime = maxLeaseRetryTime;
+  }
+
   /**
    * Returns if a request should be retried based on the retry count, current response,
    * and the current strategy.
@@ -124,7 +145,8 @@ public class ExponentialRetryPolicy {
    * @param statusCode The status code of the response, or -1 for socket error.
    * @return true if the request should be retried; false otherwise.
    */
-  public boolean shouldRetry(final int retryCount, final int statusCode) {
+  public boolean shouldRetry(final int retryCount, final int statusCode, final AbfsRestOperationType operationType,
+                             List<AbfsHttpHeader> requestHeaders, long operationTime) {
     return retryCount < this.retryCount
         && (statusCode == -1
         || statusCode == HttpURLConnection.HTTP_CLIENT_TIMEOUT

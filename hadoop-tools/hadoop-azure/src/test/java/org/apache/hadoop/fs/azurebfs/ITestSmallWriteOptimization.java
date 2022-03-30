@@ -311,6 +311,7 @@ public class ITestSmallWriteOptimization extends AbstractAbfsScaleTest {
 
     final AzureBlobFileSystem currentfs = this.getFileSystem();
     Configuration config = currentfs.getConf();
+    config.set(ConfigurationKeys.FS_AZURE_WRITE_ENFORCE_LEASE, "true");
     boolean isAppendBlobTestSettingEnabled = (config.get(FS_AZURE_TEST_APPENDBLOB_ENABLED) == "true");
 
     // This optimization doesnt take effect when append blob is on.

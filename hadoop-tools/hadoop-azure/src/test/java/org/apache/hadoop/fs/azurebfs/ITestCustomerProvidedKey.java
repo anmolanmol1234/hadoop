@@ -486,7 +486,7 @@ public class ITestCustomerProvidedKey extends AbstractAbfsIntegrationTest {
         .createPath(testFileName, true, true,
             isNamespaceEnabled ? getOctalNotation(permission) : null,
             isNamespaceEnabled ? getOctalNotation(umask) : null, false, null,
-            tracingContext);
+            tracingContext, null);
     assertCPKHeaders(abfsRestOperation, isWithCPK);
     assertResponseHeader(abfsRestOperation, isWithCPK,
         X_MS_ENCRYPTION_KEY_SHA256, getCPKSha(fs));

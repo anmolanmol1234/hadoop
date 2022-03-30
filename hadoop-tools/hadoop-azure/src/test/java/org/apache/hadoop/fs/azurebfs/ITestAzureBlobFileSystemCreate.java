@@ -25,6 +25,7 @@ import java.lang.reflect.Field;
 import java.util.EnumSet;
 import java.util.UUID;
 
+import org.apache.hadoop.fs.azurebfs.services.*;
 import org.junit.Test;
 
 import org.apache.hadoop.conf.Configuration;
@@ -40,10 +41,6 @@ import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.hadoop.fs.azurebfs.constants.FSOperationType;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AbfsRestOperationException;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.ConcurrentWriteOperationDetectedException;
-import org.apache.hadoop.fs.azurebfs.services.AbfsClient;
-import org.apache.hadoop.fs.azurebfs.services.AbfsHttpOperation;
-import org.apache.hadoop.fs.azurebfs.services.AbfsRestOperation;
-import org.apache.hadoop.fs.azurebfs.services.TestAbfsClient;
 import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
 import org.apache.hadoop.fs.azurebfs.utils.TracingHeaderValidator;
 
@@ -400,7 +397,7 @@ public class ITestAzureBlobFileSystemCreate extends
         .createPath(any(String.class), eq(true), eq(false),
             isNamespaceEnabled ? any(String.class) : eq(null),
             isNamespaceEnabled ? any(String.class) : eq(null),
-            any(boolean.class), eq(null), any(TracingContext.class));
+            any(boolean.class), eq(null), any(TracingContext.class), any(AbfsLease.class));
 
     doThrow(fileNotFoundResponseEx) // Scn1: GFS fails with Http404
         .doThrow(serverErrorResponseEx) // Scn2: GFS fails with Http500
@@ -418,7 +415,7 @@ public class ITestAzureBlobFileSystemCreate extends
         .createPath(any(String.class), eq(true), eq(true),
             isNamespaceEnabled ? any(String.class) : eq(null),
             isNamespaceEnabled ? any(String.class) : eq(null),
-            any(boolean.class), eq(null), any(TracingContext.class));
+            any(boolean.class), eq(null), any(TracingContext.class), any(AbfsLease.class));
 
     // Scn1: GFS fails with Http404
     // Sequence of events expected:

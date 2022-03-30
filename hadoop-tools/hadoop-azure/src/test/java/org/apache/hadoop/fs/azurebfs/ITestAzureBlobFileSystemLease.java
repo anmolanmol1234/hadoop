@@ -30,6 +30,7 @@ import org.apache.hadoop.fs.azurebfs.constants.FSOperationType;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AzureBlobFileSystemException;
 import org.apache.hadoop.fs.azurebfs.services.AbfsClient;
 import org.apache.hadoop.fs.azurebfs.services.AbfsLease;
+import org.apache.hadoop.fs.azurebfs.services.AbfsInfiniteLease;
 import org.apache.hadoop.fs.azurebfs.services.AbfsOutputStream;
 import org.apache.hadoop.fs.azurebfs.utils.Listener;
 import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
@@ -318,7 +319,7 @@ public class ITestAzureBlobFileSystemLease extends AbstractAbfsIntegrationTest {
         FSOperationType.TEST_OP, true, 0);
     tracingContext.setListener(listener);
 
-    AbfsLease lease = new AbfsLease(fs.getAbfsClient(),
+    AbfsInfiniteLease lease = new AbfsInfiniteLease(fs.getAbfsClient(),
         testFilePath.toUri().getPath(), tracingContext);
     Assert.assertNotNull("Did not successfully lease file", lease.getLeaseID());
     listener.setOperation(FSOperationType.RELEASE_LEASE);
@@ -333,7 +334,7 @@ public class ITestAzureBlobFileSystemLease extends AbstractAbfsIntegrationTest {
         .doCallRealMethod().when(mockClient)
         .acquireLease(anyString(), anyInt(), any(TracingContext.class));
 
-    lease = new AbfsLease(mockClient, testFilePath.toUri().getPath(), 5, 1, tracingContext);
+    lease = new AbfsInfiniteLease(mockClient, testFilePath.toUri().getPath(), 5, 1, tracingContext);
     Assert.assertNotNull("Acquire lease should have retried", lease.getLeaseID());
     lease.free();
     Assert.assertEquals("Unexpected acquire retry count", 2, lease.getAcquireRetryCount());
@@ -342,7 +343,7 @@ public class ITestAzureBlobFileSystemLease extends AbstractAbfsIntegrationTest {
         .acquireLease(anyString(), anyInt(), any(TracingContext.class));
 
     LambdaTestUtils.intercept(AzureBlobFileSystemException.class, () -> {
-      new AbfsLease(mockClient, testFilePath.toUri().getPath(), 5, 1,
+      new AbfsInfiniteLease(mockClient, testFilePath.toUri().getPath(), 5, 1,
           tracingContext);
     });
   }

@@ -327,7 +327,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
              * leaseId - The AbfsLeaseId for this request.
              */
             AppendRequestParameters reqParams = new AppendRequestParameters(
-                offset, 0, bytesLength, mode, false, leaseId);
+                offset, 0, bytesLength, mode, false, lease);
             AbfsRestOperation op =
                 client.append(path, blockUploadData.toByteArray(), reqParams,
                     cachedSasToken.get(), new TracingContext(tracingContext));
@@ -494,9 +494,9 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
       // See HADOOP-16785
       throw wrapException(path, e.getMessage(), e);
     } finally {
-      if (hasLease()) {
-        lease.free();
-        lease = null;
+      if (hasLease() && lease.isInfiniteLease) {
+          ((AbfsInfiniteLease)lease).free();
+          lease = null;
       }
       lastError = new IOException(FSExceptionMessages.STREAM_IS_CLOSED);
       buffer = null;
@@ -573,7 +573,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(tracker,
         "writeCurrentBufferToService", "append")) {
       AppendRequestParameters reqParams = new AppendRequestParameters(offset, 0,
-          bytesLength, APPEND_MODE, true, leaseId);
+          bytesLength, APPEND_MODE, true, lease);
       AbfsRestOperation op = client.append(path, uploadData.toByteArray(), reqParams,
           cachedSasToken.get(), new TracingContext(tracingContext));
       cachedSasToken.update(op.getSasToken());
@@ -636,7 +636,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(tracker,
             "flushWrittenBytesToServiceInternal", "flush")) {
       AbfsRestOperation op = client.flush(path, offset, retainUncommitedData, isClose,
-          cachedSasToken.get(), leaseId, new TracingContext(tracingContext));
+          cachedSasToken.get(), lease, new TracingContext(tracingContext));
       cachedSasToken.update(op.getSasToken());
       perfInfo.registerResult(op.getResult()).registerSuccess(true);
     } catch (AzureBlobFileSystemException ex) {

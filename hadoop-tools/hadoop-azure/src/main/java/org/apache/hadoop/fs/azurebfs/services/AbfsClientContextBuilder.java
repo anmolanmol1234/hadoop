@@ -18,6 +18,8 @@
 
 package org.apache.hadoop.fs.azurebfs.services;
 
+import java.rmi.dgc.Lease;
+
 /**
  * A builder for AbfsClientContext class with different options to select and
  * build from.
@@ -27,10 +29,17 @@ public class AbfsClientContextBuilder {
   private ExponentialRetryPolicy exponentialRetryPolicy;
   private AbfsPerfTracker abfsPerfTracker;
   private AbfsCounters abfsCounters;
+  private LeaseRetryPolicy leaseRetryPolicy;
 
   public AbfsClientContextBuilder withExponentialRetryPolicy(
       final ExponentialRetryPolicy exponentialRetryPolicy) {
     this.exponentialRetryPolicy = exponentialRetryPolicy;
+    return this;
+  }
+
+  public AbfsClientContextBuilder withLeaseRetryPolicy(
+          final LeaseRetryPolicy leaseRetryPolicy)  {
+    this.leaseRetryPolicy = leaseRetryPolicy;
     return this;
   }
 
@@ -52,7 +61,7 @@ public class AbfsClientContextBuilder {
    */
   public AbfsClientContext build() {
     //validate the values
-    return new AbfsClientContext(exponentialRetryPolicy, abfsPerfTracker,
+    return new AbfsClientContext(exponentialRetryPolicy, leaseRetryPolicy, abfsPerfTracker,
         abfsCounters);
   }
 }

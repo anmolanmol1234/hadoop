@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.azurebfs.services;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.URL;
+import java.time.Instant;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -298,7 +299,7 @@ public final class TestAbfsClient {
 
     when(client.getAbfsPerfTracker()).thenReturn(tracker);
     when(client.getAuthType()).thenReturn(currentAuthType);
-    when(client.getRetryPolicy()).thenReturn(
+    when(client.getRetryPolicy(AbfsRestOperationType.CreatePath)).thenReturn(
         new ExponentialRetryPolicy(1));
 
     when(client.createDefaultUriQueryBuilder()).thenCallRealMethod();
@@ -393,6 +394,6 @@ public final class TestAbfsClient {
         client,
         method,
         url,
-        requestHeaders);
+        requestHeaders, Instant.now());
   }
 }

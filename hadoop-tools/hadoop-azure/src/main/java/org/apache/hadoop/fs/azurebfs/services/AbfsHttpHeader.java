@@ -37,4 +37,17 @@ public class AbfsHttpHeader {
   public String getValue() {
     return value;
   }
+
+  @Override
+  public boolean equals(Object object)
+  {
+    boolean isEqual= false;
+
+    if (object != null && object instanceof AbfsHttpHeader)
+    {
+      isEqual = (this.name.equals(((AbfsHttpHeader) object).name) && this.value.equals(((AbfsHttpHeader) object).value));
+    }
+
+    return isEqual;
+  }
 }

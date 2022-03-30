@@ -23,6 +23,8 @@ import java.io.UncheckedIOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.UnknownHostException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -67,7 +69,7 @@ public class AbfsRestOperation {
   private int bufferOffset;
   private int bufferLength;
   private int retryCount = 0;
-
+  private Instant operationStartTime;
   private AbfsHttpOperation result;
   private AbfsCounters abfsCounters;
 
@@ -116,8 +118,8 @@ public class AbfsRestOperation {
                     final AbfsClient client,
                     final String method,
                     final URL url,
-                    final List<AbfsHttpHeader> requestHeaders) {
-    this(operationType, client, method, url, requestHeaders, null);
+                    final List<AbfsHttpHeader> requestHeaders, Instant operationStartTime) {
+    this(operationType, client, method, url, requestHeaders, null, operationStartTime);
   }
 
   /**
@@ -134,7 +136,7 @@ public class AbfsRestOperation {
                     final String method,
                     final URL url,
                     final List<AbfsHttpHeader> requestHeaders,
-                    final String sasToken) {
+                    final String sasToken, Instant operationStartTime) {
     this.operationType = operationType;
     this.client = client;
     this.method = method;
@@ -145,6 +147,7 @@ public class AbfsRestOperation {
             || AbfsHttpConstants.HTTP_METHOD_PATCH.equals(method));
     this.sasToken = sasToken;
     this.abfsCounters = client.getAbfsCounters();
+    this.operationStartTime = operationStartTime;
   }
 
   /**
@@ -169,14 +172,13 @@ public class AbfsRestOperation {
                     byte[] buffer,
                     int bufferOffset,
                     int bufferLength,
-                    String sasToken) {
-    this(operationType, client, method, url, requestHeaders, sasToken);
+                    String sasToken, Instant operationStartTime) {
+    this(operationType, client, method, url, requestHeaders, sasToken, operationStartTime);
     this.buffer = buffer;
     this.bufferOffset = bufferOffset;
     this.bufferLength = bufferLength;
     this.abfsCounters = client.getAbfsCounters();
   }
-
   /**
    * Execute a AbfsRestOperation. Track the Duration of a request if
    * abfsCounters isn't null.
@@ -220,7 +222,7 @@ public class AbfsRestOperation {
         tracingContext.setRetryCount(retryCount);
         LOG.debug("Retrying REST operation {}. RetryCount = {}",
             operationType, retryCount);
-        Thread.sleep(client.getRetryPolicy().getRetryInterval(retryCount));
+        Thread.sleep(client.getRetryPolicy(operationType).getRetryInterval(retryCount));
       } catch (InterruptedException ex) {
         Thread.currentThread().interrupt();
       }
@@ -302,7 +304,7 @@ public class AbfsRestOperation {
       hostname = httpOperation.getHost();
       LOG.warn("Unknown host name: {}. Retrying to resolve the host name...",
           hostname);
-      if (!client.getRetryPolicy().shouldRetry(retryCount, -1)) {
+      if (!client.getRetryPolicy(operationType).shouldRetry(retryCount, -1, operationType, requestHeaders, Duration.between(operationStartTime, Instant.now()).getSeconds())) {
         throw new InvalidAbfsRestOperationException(ex);
       }
       return false;
@@ -311,7 +313,7 @@ public class AbfsRestOperation {
         LOG.debug("HttpRequestFailure: {}, {}", httpOperation, ex);
       }
 
-      if (!client.getRetryPolicy().shouldRetry(retryCount, -1)) {
+      if (!client.getRetryPolicy(operationType).shouldRetry(retryCount, -1, operationType, requestHeaders, Duration.between(operationStartTime, Instant.now()).getSeconds())) {
         throw new InvalidAbfsRestOperationException(ex);
       }
 
@@ -322,7 +324,8 @@ public class AbfsRestOperation {
 
     LOG.debug("HttpRequest: {}: {}", operationType, httpOperation);
 
-    if (client.getRetryPolicy().shouldRetry(retryCount, httpOperation.getStatusCode())) {
+    long operationTime = Duration.between(operationStartTime, Instant.now()).getSeconds();
+    if (client.getRetryPolicy(operationType).shouldRetry(retryCount, httpOperation.getStatusCode(), operationType, requestHeaders, operationTime)) {
       return false;
     }
 
