@@ -145,8 +145,8 @@ public class ExponentialRetryPolicy {
    * @param statusCode The status code of the response, or -1 for socket error.
    * @return true if the request should be retried; false otherwise.
    */
-  public boolean shouldRetry(final int retryCount, final int statusCode, final AbfsRestOperationType operationType,
-                             List<AbfsHttpHeader> requestHeaders, long operationTime) {
+  public boolean shouldRetry(final int retryCount, final int statusCode, final String statusDescription,
+      final AbfsRestOperationType operationType, List<AbfsHttpHeader> requestHeaders, long operationTime) {
     return retryCount < this.retryCount
         && (statusCode == -1
         || statusCode == HttpURLConnection.HTTP_CLIENT_TIMEOUT

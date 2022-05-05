@@ -54,6 +54,7 @@ public class ITestAzureBlobFileSystemBundleLease extends
   private static final int TEST_BUFFER_SIZE = 3 * ONE_THOUSAND * BASE_SIZE;
   private static final int THREAD_SLEEP_TIME = 1000;
   private static final Path TEST_FILE_PATH = new Path("testfile");
+  private static final Path TEST_FILE_PATH1 = new Path("testfile1");
 
   public ITestAzureBlobFileSystemBundleLease() throws Exception {
     super();
@@ -98,8 +99,6 @@ public class ITestAzureBlobFileSystemBundleLease extends
     fs.delete(TEST_FILE_PATH, false);
   }
 
-
-
   @Test
   public void testAppendWithRetry() throws Exception {
     final AzureBlobFileSystem fs = getFileSystem();
@@ -108,6 +107,14 @@ public class ITestAzureBlobFileSystemBundleLease extends
     fs.getFileStatus(TEST_FILE_PATH);
     final byte[] b = new byte[4096];
     new Random().nextBytes(b);
+    Configuration config = new Configuration(this.getRawConfiguration());
+    config.set(ConfigurationKeys.FS_AZURE_WRITE_ENFORCE_LEASE, "false");
+    final AzureBlobFileSystem currentFs =
+        (AzureBlobFileSystem) FileSystem.newInstance(fs.getUri(), config);
+    FSDataOutputStream stream2 = currentFs.append(TEST_FILE_PATH);
+    stream2.write(b, 0, 1024);
+    System.out.println("Stream 2");
+    stream2.hsync();
     stream.write(b);
     stream.close();
     fs.delete(TEST_FILE_PATH, false);
@@ -118,15 +125,52 @@ public class ITestAzureBlobFileSystemBundleLease extends
     final AzureBlobFileSystem fs = getFileSystem();
     final byte[] b = new byte[4096];
     new Random().nextBytes(b);
-    try(FSDataOutputStream stream = fs.create(TEST_FILE_PATH)) {
-      stream.write(b, 0, 1024);
-      Thread.sleep(80000);
-      FSDataOutputStream stream2 = fs.append(TEST_FILE_PATH);
-      stream2.write(b, 0, 1024);
-      stream2.hsync();
-    }
+    intercept(IOException.class,
+        () -> {
+          try (FSDataOutputStream stream = fs.create(TEST_FILE_PATH)) {
+            stream.write(b, 0, 1024);
+            Thread.sleep(40000);
+            stream.hsync();
+            Thread.sleep(20000);
+            FSDataOutputStream stream2 = fs.append(TEST_FILE_PATH);
+            stream2.write(b, 0, 1024);
+            System.out.println("Stream 2");
+            stream2.hsync();
+          }
+        });
   }
 
+  @Test
+  public void testRenewAppendWithTwoLeases() throws Exception {
+    final AzureBlobFileSystem fs = getFileSystem();
+    final byte[] b = new byte[4096];
+    new Random().nextBytes(b);
+    intercept(IOException.class,
+        () -> {
+          try (FSDataOutputStream stream = fs.create(TEST_FILE_PATH)) {
+            stream.write(b, 0, 1024);
+            Thread.sleep(80000);
+            FSDataOutputStream stream2 = fs.append(TEST_FILE_PATH);
+            stream2.write(b, 0, 1024);
+            stream2.hsync();
+            Thread.sleep(40000);
+          }
+        });
+  }
+
+  @Test
+  public void testMultipleAppends() throws Exception {
+    final AzureBlobFileSystem fs = getFileSystem();
+    try(FSDataOutputStream stream = fs.create(TEST_FILE_PATH)) {
+      final byte[] b = new byte[8192];
+      new Random().nextBytes(b);
+      stream.write(b, 0, 4096);
+      stream.hsync();
+      Thread.sleep(100000);
+      stream.write(b, 0, 1024);
+      stream.hsync();
+    }
+  }
 
   @Test
   public void testMultipleWriter() throws Exception {

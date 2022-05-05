@@ -304,7 +304,7 @@ public class AbfsRestOperation {
       hostname = httpOperation.getHost();
       LOG.warn("Unknown host name: {}. Retrying to resolve the host name...",
           hostname);
-      if (!client.getRetryPolicy(operationType).shouldRetry(retryCount, -1, operationType, requestHeaders, Duration.between(operationStartTime, Instant.now()).getSeconds())) {
+      if (!client.getRetryPolicy(operationType).shouldRetry(retryCount, -1, httpOperation.getStatusDescription(), operationType, requestHeaders, Duration.between(operationStartTime, Instant.now()).getSeconds())) {
         throw new InvalidAbfsRestOperationException(ex);
       }
       return false;
@@ -313,7 +313,7 @@ public class AbfsRestOperation {
         LOG.debug("HttpRequestFailure: {}, {}", httpOperation, ex);
       }
 
-      if (!client.getRetryPolicy(operationType).shouldRetry(retryCount, -1, operationType, requestHeaders, Duration.between(operationStartTime, Instant.now()).getSeconds())) {
+      if (!client.getRetryPolicy(operationType).shouldRetry(retryCount, -1, httpOperation.getStatusDescription(), operationType, requestHeaders, Duration.between(operationStartTime, Instant.now()).getSeconds())) {
         throw new InvalidAbfsRestOperationException(ex);
       }
 
@@ -325,7 +325,7 @@ public class AbfsRestOperation {
     LOG.debug("HttpRequest: {}: {}", operationType, httpOperation);
 
     long operationTime = Duration.between(operationStartTime, Instant.now()).getSeconds();
-    if (client.getRetryPolicy(operationType).shouldRetry(retryCount, httpOperation.getStatusCode(), operationType, requestHeaders, operationTime)) {
+    if (client.getRetryPolicy(operationType).shouldRetry(retryCount, httpOperation.getStatusCode(), httpOperation.getStatusDescription(), operationType, requestHeaders, operationTime)) {
       return false;
     }
 

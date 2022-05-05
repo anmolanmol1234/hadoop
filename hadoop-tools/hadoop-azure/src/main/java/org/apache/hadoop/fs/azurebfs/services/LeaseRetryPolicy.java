@@ -47,14 +47,14 @@ public class LeaseRetryPolicy extends ExponentialRetryPolicy {
     }
 
     @Override
-    public boolean shouldRetry(final int retryCount, int statusCode, final AbfsRestOperationType operationType,
+    public boolean shouldRetry(final int retryCount, int statusCode, String statusDescription, final AbfsRestOperationType operationType,
         List<AbfsHttpHeader> requestHeaders, long operationTime) {
         if (isBundleLeaseOperation(requestHeaders)) {
             return (operationTime < this.maxLeaseRetryTime
                     && (statusCode == HttpURLConnection.HTTP_CONFLICT
-                    || statusCode == HttpURLConnection.HTTP_PRECON_FAILED));
+                    || statusCode == HttpURLConnection.HTTP_PRECON_FAILED) && AbfsLease.checkStatusDescription(statusDescription));
         }
-        return super.shouldRetry(retryCount, statusCode, operationType, requestHeaders, operationTime);
+        return super.shouldRetry(retryCount, statusCode, statusDescription, operationType, requestHeaders, operationTime);
     }
 
     public boolean isBundleLeaseOperation(List<AbfsHttpHeader> requestHeaders) {

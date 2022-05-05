@@ -32,7 +32,7 @@ public final class AbfsErrors {
   public static final String ERR_LEASE_EXPIRED = "A lease ID was specified, but the lease for the"
       + " resource has expired";
   public static final String ERR_NO_LEASE_ID_SPECIFIED = "There is currently a lease on the "
-      + "resource and no lease ID was specified in the request";
+      + "resource and no lease ID was specified in the request.";
   public static final String ERR_PARALLEL_ACCESS_DETECTED = "Parallel access to the create path "
       + "detected. Failing request to honor single writer semantics";
   public static final String ERR_ACQUIRING_LEASE = "Unable to acquire lease";
@@ -41,7 +41,9 @@ public final class AbfsErrors {
   public static final String ERR_LEASE_ID_NOT_PRESENT = "The lease ID is not present with the "
       + "specified lease operation";
   public static final String ERR_LEASE_DID_NOT_MATCH = "The lease ID specified did not match the "
-      + "lease ID for the resource with the specified lease operation";
+      + "lease ID for the resource with the specified lease operation.";
+  public static final String ERR_LEASE_MISMATCH = "The lease ID specified did not match the "
+      + "lease ID for the resource.";
   public static final String ERR_LEASE_BROKEN = "The lease ID matched, but the lease has been "
     + "broken explicitly and cannot be renewed";
   public static final String ERR_LEASE_FUTURE_EXISTS = "There is already an existing lease "

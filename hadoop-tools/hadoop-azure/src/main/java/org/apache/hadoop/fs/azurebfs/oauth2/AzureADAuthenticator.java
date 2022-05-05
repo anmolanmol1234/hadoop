@@ -319,7 +319,7 @@ public final class AzureADAuthenticator {
       }
       succeeded = ((httperror == 0) && (ex == null));
       shouldRetry = !succeeded && isRecoverableFailure
-          && tokenFetchRetryPolicy.shouldRetry(retryCount, httperror, null, null, 0L);
+          && tokenFetchRetryPolicy.shouldRetry(retryCount, httperror, null, null, null, 0L);
       retryCount++;
       if (shouldRetry) {
         LOG.debug("Retrying getTokenSingleCall. RetryCount = {}", retryCount);

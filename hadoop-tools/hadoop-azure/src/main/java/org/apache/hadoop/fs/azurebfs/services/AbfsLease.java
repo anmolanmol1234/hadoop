@@ -34,6 +34,9 @@ import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.RELEASE_
 import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X_MS_LEASE_ACTION;
 import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.ERR_ACQUIRING_LEASE;
 import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.ERR_LEASE_ALREADY_PRESENT;
+import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.ERR_LEASE_DID_NOT_MATCH;
+import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.ERR_LEASE_MISMATCH;
+import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.ERR_NO_LEASE_ID_SPECIFIED;
 
 import org.apache.hadoop.classification.VisibleForTesting;
 
@@ -74,16 +77,17 @@ public class AbfsLease {
   }
 
 
-
   public boolean checkLeaseStatus(AbfsRestOperation op) {
-    if ((op.getResult().getStatusCode() == HTTP_CONFLICT
-        || op.getResult().getStatusCode() == HTTP_PRECON_FAILED) && ((op.getRequestHeaders().contains(
-        new AbfsHttpHeader(X_MS_LEASE_ACTION, RELEASE_LEASE_ACTION)))
-        || (op.getRequestHeaders().contains(new AbfsHttpHeader(X_MS_LEASE_ACTION,
-        AUTO_RENEW_LEASE_ACTION)))) && !(op.getResult().getStatusDescription().equals(ERR_LEASE_ALREADY_PRESENT))) {
-      return true;
-    }
-    return false;
+    return (op.getResult().getStatusCode() == HTTP_CONFLICT
+        || op.getResult().getStatusCode() == HTTP_PRECON_FAILED) && (
+        (op.getRequestHeaders().contains(new AbfsHttpHeader(X_MS_LEASE_ACTION, RELEASE_LEASE_ACTION)))
+            || (op.getRequestHeaders().contains(new AbfsHttpHeader(X_MS_LEASE_ACTION, AUTO_RENEW_LEASE_ACTION)))) &&
+        checkStatusDescription(op.getResult().getStatusDescription());
+  }
+
+  public static boolean checkStatusDescription(String statusDescription) {
+    return !(statusDescription.equals(ERR_LEASE_ALREADY_PRESENT) || statusDescription.equals(ERR_NO_LEASE_ID_SPECIFIED) ||
+        statusDescription.equals(ERR_LEASE_MISMATCH) || statusDescription.equals(ERR_LEASE_DID_NOT_MATCH));
   }
 
   public boolean isFreed() {
