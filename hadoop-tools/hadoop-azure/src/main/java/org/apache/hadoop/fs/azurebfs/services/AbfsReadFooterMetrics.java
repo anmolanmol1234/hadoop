@@ -24,6 +24,7 @@ public class AbfsReadFooterMetrics {
   private String sizeReadByFirstRead;
   private String offsetDiffBetweenFirstAndSecondRead;
   private AtomicLong fileLength;
+  private double avgFileLength;
 
   public AbfsReadFooterMetrics() {
     this.fileLength = new AtomicLong();
@@ -58,7 +59,11 @@ public class AbfsReadFooterMetrics {
     return fileLength;
   }
 
-  public void setFileLength(final AtomicLong fileLength) {
-    this.fileLength = fileLength;
+  public double getAvgFileLength() {
+    return avgFileLength;
+  }
+
+  public void setAvgFileLength(final double avgFileLength) {
+    this.avgFileLength = avgFileLength;
   }
 }
