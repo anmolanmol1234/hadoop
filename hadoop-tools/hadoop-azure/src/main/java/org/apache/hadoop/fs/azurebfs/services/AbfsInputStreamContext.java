@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.fs.azurebfs.VectoredIOContext;
+import org.apache.hadoop.fs.impl.BackReference;
 import org.apache.hadoop.util.Preconditions;
 
 /**
@@ -58,6 +59,10 @@ public class AbfsInputStreamContext extends AbfsStreamContext {
    * in {@code S3AInputStream#readVectored(List, IntFunction)}.
    */
   private VectoredIOContext vectoredIOContext;
+
+  /** A BackReference to the FS instance that created this OutputStream. */
+  private BackReference fsBackRef;
+
 
   public AbfsInputStreamContext(final long sasTokenRenewPeriodForStreamsInSeconds) {
     super(sasTokenRenewPeriodForStreamsInSeconds);
@@ -135,6 +140,12 @@ public class AbfsInputStreamContext extends AbfsStreamContext {
     return this;
   }
 
+  public AbfsInputStreamContext withAbfsBackRef(
+      final BackReference fsBackRef) {
+    this.fsBackRef = fsBackRef;
+    return this;
+  }
+
   public AbfsInputStreamContext build() {
     if (readBufferSize > readAheadBlockSize) {
       LOG.debug(
@@ -196,5 +207,9 @@ public class AbfsInputStreamContext extends AbfsStreamContext {
 
   public VectoredIOContext getVectoredIOContext() {
     return vectoredIOContext;
+  }
+
+  public BackReference getFsBackRef() {
+    return fsBackRef;
   }
 }

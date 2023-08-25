@@ -62,10 +62,6 @@ https://maven.apache.org/xsd/maven-4.0.0.xsd">
       <scope>provided</scope>
       <exclusions>
         <exclusion>
-          <groupId>commons-logging</groupId>
-          <artifactId>commons-logging</artifactId>
-        </exclusion>
-        <exclusion>
           <groupId>log4j</groupId>
           <artifactId>log4j</artifactId>
         </exclusion>
@@ -118,6 +114,10 @@ https://maven.apache.org/xsd/maven-4.0.0.xsd">
         <exclusion>
           <groupId>io.netty</groupId>
           <artifactId>netty-transport</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.dataformat</groupId>
+          <artifactId>jackson-dataformat-yaml</artifactId>
         </exclusion>
       </exclusions>
     </dependency>

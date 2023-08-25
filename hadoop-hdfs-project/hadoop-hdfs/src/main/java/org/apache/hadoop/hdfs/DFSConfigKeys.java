@@ -123,6 +123,10 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       "dfs.datanode.data.write.bandwidthPerSec";
   // A value of zero indicates no limit
   public static final long DFS_DATANODE_DATA_WRITE_BANDWIDTHPERSEC_DEFAULT = 0;
+  public static final String DFS_DATANODE_DATA_READ_BANDWIDTHPERSEC_KEY =
+      "dfs.datanode.data.read.bandwidthPerSec";
+  // A value of zero indicates no limit
+  public static final long DFS_DATANODE_DATA_READ_BANDWIDTHPERSEC_DEFAULT = 0;
   public static final String DFS_DATANODE_EC_RECONSTRUCT_READ_BANDWIDTHPERSEC_KEY =
       "dfs.datanode.ec.reconstruct.read.bandwidthPerSec";
   public static final long DFS_DATANODE_EC_RECONSTRUCT_READ_BANDWIDTHPERSEC_DEFAULT =
@@ -271,6 +275,11 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       "dfs.namenode.redundancy.considerLoad.factor";
   public static final double
       DFS_NAMENODE_REDUNDANCY_CONSIDERLOAD_FACTOR_DEFAULT = 2.0;
+  public static final String DFS_NAMENODE_REDUNDANCY_CONSIDERLOADBYVOLUME_KEY =
+      "dfs.namenode.redundancy.considerLoadByVolume";
+  public static final boolean
+      DFS_NAMENODE_REDUNDANCY_CONSIDERLOADBYVOLUME_DEFAULT
+      = false;
   public static final String DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_KEY =
       HdfsClientConfigKeys.DeprecatedKeys.DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_KEY;
   public static final int DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_DEFAULT = 3;
@@ -452,7 +461,6 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   // Multiple dirs separated by "," are acceptable.
   public static final String DFS_DATANODE_PMEM_CACHE_DIRS_KEY =
       "dfs.datanode.pmem.cache.dirs";
-  public static final String DFS_DATANODE_PMEM_CACHE_DIRS_DEFAULT = "";
   public static final String  DFS_DATANODE_PMEM_CACHE_RECOVERY_KEY =
       "dfs.datanode.pmem.cache.recovery";
   public static final boolean DFS_DATANODE_PMEM_CACHE_RECOVERY_DEFAULT =
@@ -733,12 +741,6 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String  DFS_NAMENODE_DEFAULT_AUDIT_LOGGER_NAME = "default";
   public static final String  DFS_NAMENODE_AUDIT_LOG_TOKEN_TRACKING_ID_KEY = "dfs.namenode.audit.log.token.tracking.id";
   public static final boolean DFS_NAMENODE_AUDIT_LOG_TOKEN_TRACKING_ID_DEFAULT = false;
-  public static final String  DFS_NAMENODE_AUDIT_LOG_ASYNC_KEY = "dfs.namenode.audit.log.async";
-  public static final boolean DFS_NAMENODE_AUDIT_LOG_ASYNC_DEFAULT = false;
-  public static final String  DFS_NAMENODE_AUDIT_LOG_ASYNC_BLOCKING_KEY = "dfs.namenode.audit.log.async.blocking";
-  public static final boolean DFS_NAMENODE_AUDIT_LOG_ASYNC_BLOCKING_DEFAULT = true;
-  public static final String  DFS_NAMENODE_AUDIT_LOG_ASYNC_BUFFER_SIZE_KEY = "dfs.namenode.audit.log.async.buffer.size";
-  public static final int     DFS_NAMENODE_AUDIT_LOG_ASYNC_BUFFER_SIZE_DEFAULT = 128;
   public static final String  DFS_NAMENODE_AUDIT_LOG_DEBUG_CMDLIST = "dfs.namenode.audit.log.debug.cmdlist";
   public static final String  DFS_NAMENODE_METRICS_LOGGER_PERIOD_SECONDS_KEY =
       "dfs.namenode.metrics.logger.period.seconds";

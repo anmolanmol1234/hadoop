@@ -37,6 +37,7 @@ import org.apache.hadoop.fs.FileRange;
 import org.apache.hadoop.fs.VectoredReadUtils;
 import org.apache.hadoop.fs.azurebfs.VectoredIOContext;
 import org.apache.hadoop.fs.impl.CombinedFileRange;
+import org.apache.hadoop.fs.impl.BackReference;
 import org.apache.hadoop.util.Preconditions;
 
 import org.slf4j.Logger;
@@ -151,6 +152,10 @@ public class AbfsInputStream extends FSInputStream implements CanUnbuffer,
    */
   private final AtomicBoolean stopVectoredIOOperations = new AtomicBoolean(false);
 
+  /** ABFS instance to be held by the input stream to avoid GC close. */
+  private final BackReference fsBackRef;
+
+
   public AbfsInputStream(
           final AbfsClient client,
           final Statistics statistics,
@@ -185,6 +190,7 @@ public class AbfsInputStream extends FSInputStream implements CanUnbuffer,
     this.unboundedThreadPool = unboundedThreadPool;
     this.vectoredIOContext = context.getVectoredIOContext();
     readAheadBlockSize = abfsInputStreamContext.getReadAheadBlockSize();
+    this.fsBackRef = abfsInputStreamContext.getFsBackRef();
 
     // Propagate the config values to ReadBufferManager so that the first instance
     // to initialize can set the readAheadBlockSize
@@ -1052,5 +1058,10 @@ public class AbfsInputStream extends FSInputStream implements CanUnbuffer,
   @VisibleForTesting
   long getLimit() {
     return this.limit;
+  }
+
+  @VisibleForTesting
+  BackReference getFsBackRef() {
+    return fsBackRef;
   }
 }
