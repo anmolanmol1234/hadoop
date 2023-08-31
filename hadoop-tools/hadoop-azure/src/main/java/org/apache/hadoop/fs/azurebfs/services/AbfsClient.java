@@ -266,11 +266,8 @@ public class AbfsClient implements Closeable {
     abfsUriQueryBuilder.addQuery(QUERY_PARAM_RESOURCE, FILESYSTEM);
 
     final URL url = createRequestUrl(abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.CreateFileSystem,
-            this,
-            HTTP_METHOD_PUT,
-            url,
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.CreateFileSystem, HTTP_METHOD_PUT, url,
             requestHeaders);
     op.execute(tracingContext);
     return op;
@@ -290,11 +287,8 @@ public class AbfsClient implements Closeable {
     abfsUriQueryBuilder.addQuery(QUERY_PARAM_RESOURCE, FILESYSTEM);
 
     final URL url = createRequestUrl(abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.SetFileSystemProperties,
-            this,
-            HTTP_METHOD_PUT,
-            url,
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.SetFileSystemProperties, HTTP_METHOD_PUT, url,
             requestHeaders);
     op.execute(tracingContext);
     return op;
@@ -315,12 +309,8 @@ public class AbfsClient implements Closeable {
     appendSASTokenToQuery(relativePath, SASTokenProvider.LIST_OPERATION, abfsUriQueryBuilder);
 
     final URL url = createRequestUrl(abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.ListPaths,
-            this,
-            HTTP_METHOD_GET,
-            url,
-            requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.ListPaths, HTTP_METHOD_GET, url, requestHeaders);
     op.execute(tracingContext);
     return op;
   }
@@ -332,11 +322,8 @@ public class AbfsClient implements Closeable {
     abfsUriQueryBuilder.addQuery(QUERY_PARAM_RESOURCE, FILESYSTEM);
 
     final URL url = createRequestUrl(abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.GetFileSystemProperties,
-            this,
-            HTTP_METHOD_HEAD,
-            url,
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.GetFileSystemProperties, HTTP_METHOD_HEAD, url,
             requestHeaders);
     op.execute(tracingContext);
     return op;
@@ -349,11 +336,8 @@ public class AbfsClient implements Closeable {
     abfsUriQueryBuilder.addQuery(QUERY_PARAM_RESOURCE, FILESYSTEM);
 
     final URL url = createRequestUrl(abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.DeleteFileSystem,
-            this,
-            HTTP_METHOD_DELETE,
-            url,
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.DeleteFileSystem, HTTP_METHOD_DELETE, url,
             requestHeaders);
     op.execute(tracingContext);
     return op;
@@ -395,12 +379,8 @@ public class AbfsClient implements Closeable {
     appendSASTokenToQuery(path, operation, abfsUriQueryBuilder);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.CreatePath,
-            this,
-            HTTP_METHOD_PUT,
-            url,
-            requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.CreatePath, HTTP_METHOD_PUT, url, requestHeaders);
     try {
       op.execute(tracingContext);
     } catch (AzureBlobFileSystemException ex) {
@@ -430,12 +410,8 @@ public class AbfsClient implements Closeable {
     final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-        AbfsRestOperationType.LeasePath,
-        this,
-        HTTP_METHOD_POST,
-        url,
-        requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.LeasePath, HTTP_METHOD_POST, url, requestHeaders);
     op.execute(tracingContext);
     return op;
   }
@@ -450,12 +426,8 @@ public class AbfsClient implements Closeable {
     final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-        AbfsRestOperationType.LeasePath,
-        this,
-        HTTP_METHOD_POST,
-        url,
-        requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.LeasePath, HTTP_METHOD_POST, url, requestHeaders);
     op.execute(tracingContext);
     return op;
   }
@@ -470,12 +442,8 @@ public class AbfsClient implements Closeable {
     final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-        AbfsRestOperationType.LeasePath,
-        this,
-        HTTP_METHOD_POST,
-        url,
-        requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.LeasePath, HTTP_METHOD_POST, url, requestHeaders);
     op.execute(tracingContext);
     return op;
   }
@@ -490,12 +458,8 @@ public class AbfsClient implements Closeable {
     final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-        AbfsRestOperationType.LeasePath,
-        this,
-        HTTP_METHOD_POST,
-        url,
-        requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.LeasePath, HTTP_METHOD_POST, url, requestHeaders);
     op.execute(tracingContext);
     return op;
   }
@@ -645,12 +609,8 @@ public class AbfsClient implements Closeable {
 
   @VisibleForTesting
   AbfsRestOperation createRenameRestOperation(URL url, List<AbfsHttpHeader> requestHeaders) {
-    AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.RenamePath,
-            this,
-            HTTP_METHOD_PUT,
-            url,
-            requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.RenamePath, HTTP_METHOD_PUT, url, requestHeaders);
     return op;
   }
 
@@ -829,15 +789,8 @@ public class AbfsClient implements Closeable {
       final int bufferOffset,
       final int bufferLength,
       final String sasTokenForReuse) {
-    return new AbfsRestOperation(
-        operationType,
-        this,
-        httpMethod,
-        url,
-        requestHeaders,
-        buffer,
-        bufferOffset,
-        bufferLength, sasTokenForReuse);
+    return getAbfsRestOperation(operationType, httpMethod, url, requestHeaders,
+            buffer, bufferOffset, bufferLength, sasTokenForReuse);
   }
 
   /**
@@ -896,12 +849,9 @@ public class AbfsClient implements Closeable {
         abfsUriQueryBuilder, cachedSasToken);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.Flush,
-            this,
-            HTTP_METHOD_PUT,
-            url,
-            requestHeaders, sasTokenForReuse);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.Flush, HTTP_METHOD_PUT, url, requestHeaders,
+            sasTokenForReuse);
     op.execute(tracingContext);
     return op;
   }
@@ -923,11 +873,8 @@ public class AbfsClient implements Closeable {
     appendSASTokenToQuery(path, SASTokenProvider.SET_PROPERTIES_OPERATION, abfsUriQueryBuilder);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.SetPathProperties,
-            this,
-            HTTP_METHOD_PUT,
-            url,
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.SetPathProperties, HTTP_METHOD_PUT, url,
             requestHeaders);
     op.execute(tracingContext);
     return op;
@@ -952,11 +899,8 @@ public class AbfsClient implements Closeable {
     appendSASTokenToQuery(path, operation, abfsUriQueryBuilder);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.GetPathStatus,
-            this,
-            HTTP_METHOD_HEAD,
-            url,
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.GetPathStatus, HTTP_METHOD_HEAD, url,
             requestHeaders);
     op.execute(tracingContext);
     return op;
@@ -977,15 +921,9 @@ public class AbfsClient implements Closeable {
         abfsUriQueryBuilder, cachedSasToken);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.ReadFile,
-            this,
-            HTTP_METHOD_GET,
-            url,
-            requestHeaders,
-            buffer,
-            bufferOffset,
-            bufferLength, sasTokenForReuse);
+    final AbfsRestOperation op = getAbfsRestOperation(AbfsRestOperationType.ReadFile, HTTP_METHOD_GET,
+            url, requestHeaders, buffer, bufferOffset, bufferLength,
+            sasTokenForReuse);
     op.execute(tracingContext);
 
     return op;
@@ -1003,11 +941,8 @@ public class AbfsClient implements Closeable {
     appendSASTokenToQuery(path, operation, abfsUriQueryBuilder);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.DeletePath,
-            this,
-            HTTP_METHOD_DELETE,
-            url,
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.DeletePath, HTTP_METHOD_DELETE, url,
             requestHeaders);
     try {
     op.execute(tracingContext);
@@ -1052,12 +987,9 @@ public class AbfsClient implements Closeable {
         && DEFAULT_DELETE_CONSIDERED_IDEMPOTENT) {
       // Server has returned HTTP 404, which means path no longer
       // exists. Assuming delete result to be idempotent, return success.
-      final AbfsRestOperation successOp = new AbfsRestOperation(
-          AbfsRestOperationType.DeletePath,
-          this,
-          HTTP_METHOD_DELETE,
-          op.getUrl(),
-          op.getRequestHeaders());
+      final AbfsRestOperation successOp = getAbfsRestOperation(
+              AbfsRestOperationType.DeletePath, HTTP_METHOD_DELETE, op.getUrl(),
+              op.getRequestHeaders());
       successOp.hardSetResult(HttpURLConnection.HTTP_OK);
       LOG.debug("Returning success response from delete idempotency logic");
       return successOp;
@@ -1087,12 +1019,8 @@ public class AbfsClient implements Closeable {
     appendSASTokenToQuery(path, SASTokenProvider.SET_OWNER_OPERATION, abfsUriQueryBuilder);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-        AbfsRestOperationType.SetOwner,
-        this,
-        AbfsHttpConstants.HTTP_METHOD_PUT,
-        url,
-        requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.SetOwner, AbfsHttpConstants.HTTP_METHOD_PUT, url, requestHeaders);
     op.execute(tracingContext);
     return op;
   }
@@ -1113,12 +1041,9 @@ public class AbfsClient implements Closeable {
     appendSASTokenToQuery(path, SASTokenProvider.SET_PERMISSION_OPERATION, abfsUriQueryBuilder);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-        AbfsRestOperationType.SetPermissions,
-        this,
-        AbfsHttpConstants.HTTP_METHOD_PUT,
-        url,
-        requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.SetPermissions, AbfsHttpConstants.HTTP_METHOD_PUT,
+            url, requestHeaders);
     op.execute(tracingContext);
     return op;
   }
@@ -1148,12 +1073,9 @@ public class AbfsClient implements Closeable {
     appendSASTokenToQuery(path, SASTokenProvider.SET_ACL_OPERATION, abfsUriQueryBuilder);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-        AbfsRestOperationType.SetAcl,
-        this,
-        AbfsHttpConstants.HTTP_METHOD_PUT,
-        url,
-        requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.SetAcl, AbfsHttpConstants.HTTP_METHOD_PUT, url,
+            requestHeaders);
     op.execute(tracingContext);
     return op;
   }
@@ -1173,12 +1095,9 @@ public class AbfsClient implements Closeable {
     appendSASTokenToQuery(path, SASTokenProvider.GET_ACL_OPERATION, abfsUriQueryBuilder);
 
     final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-        AbfsRestOperationType.GetAcl,
-        this,
-        AbfsHttpConstants.HTTP_METHOD_HEAD,
-        url,
-        requestHeaders);
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.GetAcl, AbfsHttpConstants.HTTP_METHOD_HEAD, url,
+            requestHeaders);
     op.execute(tracingContext);
     return op;
   }
@@ -1200,9 +1119,9 @@ public class AbfsClient implements Closeable {
     abfsUriQueryBuilder.addQuery(QUERY_FS_ACTION, rwx);
     appendSASTokenToQuery(path, SASTokenProvider.CHECK_ACCESS_OPERATION, abfsUriQueryBuilder);
     URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    AbfsRestOperation op = new AbfsRestOperation(
-        AbfsRestOperationType.CheckAccess, this,
-        AbfsHttpConstants.HTTP_METHOD_HEAD, url, createDefaultHeaders());
+    AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.CheckAccess, AbfsHttpConstants.HTTP_METHOD_HEAD,
+            url, createDefaultHeaders());
     op.execute(tracingContext);
     return op;
   }
@@ -1441,5 +1360,83 @@ public class AbfsClient implements Closeable {
   @VisibleForTesting
   protected AccessTokenProvider getTokenProvider() {
     return tokenProvider;
+  }
+
+  /**
+   * Creates an AbfsRestOperation with additional parameters for buffer and SAS token.
+   *
+   * @param operationType   The type of the operation.
+   * @param httpMethod      The HTTP method of the operation.
+   * @param url             The URL associated with the operation.
+   * @param requestHeaders The list of HTTP headers for the request.
+   * @param buffer          The byte buffer containing data for the operation.
+   * @param bufferOffset    The offset within the buffer where the data starts.
+   * @param bufferLength    The length of the data within the buffer.
+   * @param sasTokenForReuse The SAS token for reusing authentication.
+   * @return An AbfsRestOperation instance.
+   */
+  AbfsRestOperation getAbfsRestOperation(final AbfsRestOperationType operationType,
+                                         final String httpMethod,
+                                         final URL url,
+                                         final List<AbfsHttpHeader> requestHeaders,
+                                         final byte[] buffer,
+                                         final int bufferOffset,
+                                         final int bufferLength,
+                                         final String sasTokenForReuse) {
+    return new AbfsRestOperation(
+            operationType,
+            this,
+            httpMethod,
+            url,
+            requestHeaders,
+            buffer,
+            bufferOffset,
+            bufferLength,
+            sasTokenForReuse);
+  }
+
+  /**
+   * Creates an AbfsRestOperation with basic parameters and no buffer or SAS token.
+   *
+   * @param operationType   The type of the operation.
+   * @param httpMethod      The HTTP method of the operation.
+   * @param url             The URL associated with the operation.
+   * @param requestHeaders The list of HTTP headers for the request.
+   * @return An AbfsRestOperation instance.
+   */
+  AbfsRestOperation getAbfsRestOperation(final AbfsRestOperationType operationType,
+                                         final String httpMethod,
+                                         final URL url,
+                                         final List<AbfsHttpHeader> requestHeaders) {
+    return new AbfsRestOperation(
+            operationType,
+            this,
+            httpMethod,
+            url,
+            requestHeaders
+    );
+  }
+
+  /**
+   * Creates an AbfsRestOperation with parameters including request headers and SAS token.
+   *
+   * @param operationType   The type of the operation.
+   * @param httpMethod      The HTTP method of the operation.
+   * @param url             The URL associated with the operation.
+   * @param requestHeaders The list of HTTP headers for the request.
+   * @param sasTokenForReuse The SAS token for reusing authentication.
+   * @return An AbfsRestOperation instance.
+   */
+  AbfsRestOperation getAbfsRestOperation(final AbfsRestOperationType operationType,
+                                         final String httpMethod,
+                                         final URL url,
+                                         final List<AbfsHttpHeader> requestHeaders,
+                                         final String sasTokenForReuse) {
+    return new AbfsRestOperation(
+            operationType,
+            this,
+            httpMethod,
+            url,
+            requestHeaders, sasTokenForReuse);
   }
 }
