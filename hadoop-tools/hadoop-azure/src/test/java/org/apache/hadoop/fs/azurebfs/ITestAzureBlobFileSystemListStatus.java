@@ -20,6 +20,7 @@ package org.apache.hadoop.fs.azurebfs;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -27,6 +28,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import org.apache.hadoop.fs.azurebfs.services.AbfsClient;
+import org.apache.hadoop.fs.azurebfs.services.AbfsClientTestUtil;
+import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
+import org.apache.hadoop.fs.azurebfs.utils.TracingHeaderFormat;
 import org.junit.Test;
 
 import org.apache.hadoop.conf.Configuration;
@@ -38,14 +43,22 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azurebfs.constants.FSOperationType;
 import org.apache.hadoop.fs.azurebfs.utils.TracingHeaderValidator;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
+import org.mockito.Mockito;
+import org.mockito.stubbing.Stubber;
 
+import static java.net.HttpURLConnection.HTTP_OK;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_LIST_MAX_RESULTS;
+import static org.apache.hadoop.fs.azurebfs.services.RetryReasonConstants.CONNECTION_TIMEOUT_JDK_MESSAGE;
 import static org.apache.hadoop.fs.contract.ContractTestUtils.assertMkdirs;
 import static org.apache.hadoop.fs.contract.ContractTestUtils.createFile;
 import static org.apache.hadoop.fs.contract.ContractTestUtils.assertPathExists;
 import static org.apache.hadoop.fs.contract.ContractTestUtils.rename;
 
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 
 /**
  * Test listStatus operation.
@@ -247,5 +260,49 @@ public class ITestAzureBlobFileSystemListStatus extends
     }
     assertTrue("Attempt to create file that ended with a dot should"
         + " throw IllegalArgumentException", exceptionThrown);
+  }
+
+  /**
+   * Test to verify that each paginated call to ListBlobs uses a new tracing context.
+   * @throws Exception
+   */
+  @Test
+  public void testListPathTracingContext() throws Exception {
+    final AzureBlobFileSystem fs = getFileSystem();
+    TracingHeaderValidator validator = new TracingHeaderValidator(getConfiguration().getClientCorrelationId(),
+            fs.getFileSystemId(), FSOperationType.LISTSTATUS, true, 0);
+    validator.setDisableValidation(true);
+    fs.registerListener(validator);
+
+    final AzureBlobFileSystem spiedFs = Mockito.spy(fs);
+    final AzureBlobFileSystemStore spiedStore = Mockito.spy(fs.getAbfsStore());
+    final AbfsClient spiedClient = Mockito.spy(fs.getAbfsClient());
+    final TracingContext spiedTracingContext = Mockito.spy(
+            new TracingContext(
+                    fs.getClientCorrelationId(), fs.getFileSystemId(),
+                    FSOperationType.LISTSTATUS, true, TracingHeaderFormat.ALL_ID_FORMAT,validator));
+
+    Mockito.doReturn(spiedStore).when(spiedFs).getAbfsStore();
+    spiedStore.setClient(spiedClient);
+    spiedFs.setWorkingDirectory(new Path("/"));
+
+    AbfsClientTestUtil.setMockAbfsRestOperationForListPathOperation(spiedClient,
+            (httpOperation) -> {
+
+              Stubber stubber = Mockito.doThrow(
+                      new SocketTimeoutException(CONNECTION_TIMEOUT_JDK_MESSAGE));
+              stubber.doNothing().when(httpOperation).processResponse(
+                      nullable(byte[].class), nullable(int.class), nullable(int.class));
+
+              when(httpOperation.getStatusCode()).thenReturn(-1).thenReturn(HTTP_OK);
+              return httpOperation;
+            });
+
+    List<FileStatus> fileStatuses = new ArrayList<>();
+    spiedStore.listStatus(new Path("/"), "", fileStatuses, true, null, spiedTracingContext);
+
+    // Assert that there were 2 paginated ListBlob calls made and new tracing context were created.
+    Mockito.verify(spiedClient, times(2)).listPath(any(), any(), any(), any(), any());
+    Mockito.verify(spiedTracingContext, times(0)).constructHeader(any(), any());
   }
 }

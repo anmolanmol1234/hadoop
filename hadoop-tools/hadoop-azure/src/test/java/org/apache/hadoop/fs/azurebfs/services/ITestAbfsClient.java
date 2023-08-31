@@ -332,6 +332,10 @@ public final class ITestAbfsClient extends AbstractAbfsIntegrationTest {
     when(client.createDefaultUriQueryBuilder()).thenCallRealMethod();
     when(client.createRequestUrl(any(), any())).thenCallRealMethod();
     when(client.getAccessToken()).thenCallRealMethod();
+    when(client.getAbfsRestOperation(
+            Mockito.any(AbfsRestOperationType.class), Mockito.anyString(),
+            Mockito.any(URL.class),
+            Mockito.anyList())).thenCallRealMethod();
     when(client.getSharedKeyCredentials()).thenCallRealMethod();
     when(client.createDefaultHeaders()).thenCallRealMethod();
     when(client.getAbfsConfiguration()).thenReturn(abfsConfig);
