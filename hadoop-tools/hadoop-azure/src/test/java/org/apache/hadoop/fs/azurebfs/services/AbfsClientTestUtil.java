@@ -63,14 +63,14 @@ public final class AbfsClientTestUtil {
         ExponentialRetryPolicy retryPolicy = Mockito.mock(ExponentialRetryPolicy.class);
         AbfsHttpOperation httpOperation = Mockito.mock(AbfsHttpOperation.class);
         AbfsRestOperation abfsRestOperation = Mockito.spy(new AbfsRestOperation(
-                AbfsRestOperationType.ListPaths,
+                AbfsRestOperationType.GetPathStatus,
                 spiedClient,
                 HTTP_METHOD_GET,
                 null,
                 new ArrayList<>()
         ));
 
-        Mockito.doReturn(abfsRestOperation).when(spiedClient).listPath(any(), any(), any(), any(), any());
+        Mockito.doReturn(abfsRestOperation).when(spiedClient).getPathStatus(any(), any(), any());
 
         addMockBehaviourToAbfsClient(spiedClient, retryPolicy);
         addMockBehaviourToRestOpAndHttpOp(abfsRestOperation, httpOperation);
