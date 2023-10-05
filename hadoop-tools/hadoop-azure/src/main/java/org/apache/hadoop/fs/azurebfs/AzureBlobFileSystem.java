@@ -45,6 +45,8 @@ import java.util.concurrent.Future;
 import javax.annotation.Nullable;
 
 import org.apache.hadoop.classification.VisibleForTesting;
+import org.apache.hadoop.fs.azurebfs.contracts.exceptions.InvalidConfigurationValueException;
+import org.apache.hadoop.fs.azurebfs.services.PrefixMode;
 import org.apache.hadoop.fs.impl.BackReference;
 import org.apache.hadoop.security.ProviderUtils;
 import org.apache.hadoop.util.Preconditions;
@@ -158,6 +160,8 @@ public class AzureBlobFileSystem extends FileSystem
 
   /** Storing full path uri for better logging. */
   private URI fullPathUri;
+  private PrefixMode prefixMode = PrefixMode.DFS;
+  private boolean isNamespaceEnabled;
 
   @Override
   public void initialize(URI uri, Configuration configuration)
@@ -211,6 +215,29 @@ public class AzureBlobFileSystem extends FileSystem
 
     TracingContext tracingContext = new TracingContext(clientCorrelationId,
             fileSystemId, FSOperationType.CREATE_FILESYSTEM, tracingHeaderFormat, listener);
+    try {
+      isNamespaceEnabled = getIsNamespaceEnabled(tracingContext);
+    } catch (AbfsRestOperationException ex) {
+      /* since the filesystem has not been created. The API for HNS account would
+       * return 404 status.
+       */
+      if(ex.getStatusCode() == HttpURLConnection.HTTP_NOT_FOUND) {
+        isNamespaceEnabled = true;
+      } else {
+        throw ex;
+      }
+    }
+
+    // CPK is not supported over blob endpoint and hence initialization should fail if key is not null.
+    if (isNamespaceEnabled && uri.toString().contains(FileSystemUriSchemes.WASB_DNS_PREFIX)) {
+      if (abfsConfiguration.getClientProvidedEncryptionKey() == null) {
+        this.prefixMode = PrefixMode.BLOB;
+      } else {
+        throw new InvalidConfigurationValueException("CPK is not supported over blob endpoint " + uri);
+      }
+    }
+    abfsConfiguration.setPrefixMode(this.prefixMode);
+
     if (abfsConfiguration.getCreateRemoteFileSystemDuringInitialization()) {
       if (this.tryGetFileStatus(new Path(AbfsHttpConstants.ROOT_PATH), tracingContext) == null) {
         try {
