@@ -360,6 +360,38 @@ public class AbfsClient implements Closeable {
     return op;
   }
 
+  public AbfsRestOperation createPathBlob(final String path, final boolean overwrite, final String eTag,
+                                          TracingContext tracingContext)
+          throws AzureBlobFileSystemException {
+    final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
+    if (!overwrite) {
+      requestHeaders.add(new AbfsHttpHeader(IF_NONE_MATCH, AbfsHttpConstants.STAR));
+    }
+    if (eTag != null && !eTag.isEmpty()) {
+      requestHeaders.add(new AbfsHttpHeader(HttpHeaderConfigurations.IF_MATCH, eTag));
+    }
+
+    final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
+
+    String operation = SASTokenProvider.CREATE_FILE_OPERATION;
+    appendSASTokenToQuery(path, operation, abfsUriQueryBuilder);
+
+    final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
+    requestHeaders.add(new AbfsHttpHeader(CONTENT_LENGTH, ZERO));
+    requestHeaders.add(new AbfsHttpHeader(X_MS_BLOB_TYPE, BLOCK_BLOB_TYPE));
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.PutBlob, HTTP_METHOD_PUT, url, requestHeaders);
+    try {
+      op.execute(tracingContext);
+    } catch (AzureBlobFileSystemException ex) {
+      // If we have no HTTP response, throw the original exception.
+      if (!op.hasResult()) {
+        throw ex;
+      }
+    }
+    return op;
+  }
+
   public AbfsRestOperation createPath(final String path, final boolean isFile, final boolean overwrite,
                                       final String permission, final String umask,
                                       final boolean isAppendBlob, final String eTag,
@@ -1216,6 +1248,52 @@ public class AbfsClient implements Closeable {
         AbfsHttpConstants.HTTP_METHOD_HEAD, url, createDefaultHeaders());
     op.execute(tracingContext);
     return op;
+  }
+
+  AbfsRestOperation getAbfsRestOperation(final AbfsRestOperationType operationType,
+                                         final String httpMethod,
+                                         final URL url,
+                                         final List<AbfsHttpHeader> requestHeaders,
+                                         final byte[] buffer,
+                                         final int bufferOffset,
+                                         final int bufferLength,
+                                         final String sasTokenForReuse) {
+    return new AbfsRestOperation(
+            operationType,
+            this,
+            httpMethod,
+            url,
+            requestHeaders,
+            buffer,
+            bufferOffset,
+            bufferLength,
+            sasTokenForReuse);
+  }
+
+  AbfsRestOperation getAbfsRestOperation(final AbfsRestOperationType operationType,
+                                         final String httpMethod,
+                                         final URL url,
+                                         final List<AbfsHttpHeader> requestHeaders) {
+    return new AbfsRestOperation(
+            operationType,
+            this,
+            httpMethod,
+            url,
+            requestHeaders
+    );
+  }
+
+  AbfsRestOperation getAbfsRestOperation(final AbfsRestOperationType operationType,
+                                         final String httpMethod,
+                                         final URL url,
+                                         final List<AbfsHttpHeader> requestHeaders,
+                                         final String sasTokenForReuse) {
+    return new AbfsRestOperation(
+            operationType,
+            this,
+            httpMethod,
+            url,
+            requestHeaders, sasTokenForReuse);
   }
 
   /**
