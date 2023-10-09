@@ -72,6 +72,7 @@ public final class HttpHeaderConfigurations {
   public static final String X_MS_LEASE_BREAK_PERIOD = "x-ms-lease-break-period";
   public static final String EXPECT = "Expect";
   public static final String X_MS_BLOB_TYPE = "x-ms-blob-type";
+  public static final String X_MS_METADATA_PREFIX = "x-ms-meta-";
 
   private HttpHeaderConfigurations() {}
 }

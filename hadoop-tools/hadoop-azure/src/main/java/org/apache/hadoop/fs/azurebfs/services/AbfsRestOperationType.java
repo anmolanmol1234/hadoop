@@ -44,5 +44,7 @@ public enum AbfsRestOperationType {
     LeasePath,
     PutBlob,
     CreateContainer,
-    DeleteContainer
+    DeleteContainer,
+    GetContainerMetadata,
+    SetContainerMetadata
 }

@@ -975,11 +975,8 @@ public class AzureBlobFileSystem extends FileSystem
    * @throws IllegalArgumentException If name is null or empty or if value is null
    */
   @Override
-  public void setXAttr(final Path path,
-      final String name,
-      final byte[] value,
-      final EnumSet<XAttrSetFlag> flag)
-      throws IOException {
+  public void setXAttr(final Path path, final String name, final byte[] value, final EnumSet<XAttrSetFlag> flag)
+          throws IOException {
     LOG.debug("AzureBlobFileSystem.setXAttr path: {}", path);
 
     if (name == null || name.isEmpty() || value == null) {
@@ -990,15 +987,40 @@ public class AzureBlobFileSystem extends FileSystem
 
     try {
       TracingContext tracingContext = new TracingContext(clientCorrelationId,
-          fileSystemId, FSOperationType.SET_ATTR, true, tracingHeaderFormat,
-          listener);
-      Hashtable<String, String> properties = abfsStore
-          .getPathStatus(qualifiedPath, tracingContext);
+              fileSystemId, FSOperationType.SET_ATTR, true, tracingHeaderFormat,
+              listener);
+      Hashtable<String, String> properties;
       String xAttrName = ensureValidAttributeName(name);
+      String xAttrValue;
+
+      if (abfsStore.getPrefixMode() == PrefixMode.BLOB) {
+        if (qualifiedPath.isRoot()) {
+          properties = abfsStore.getContainerMetadata(tracingContext);
+        } else {
+          properties = abfsStore.getBlobMetadata(qualifiedPath, tracingContext);
+        }
+
+        boolean xAttrExists = properties.containsKey(xAttrName);
+        XAttrSetFlag.validate(name, xAttrExists, flag);
+
+        // On Blob Endpoint metadata are passed as HTTP Request Headers
+        // Values in UTF_8 needed to be URL encoded after decoding into String
+        xAttrValue = encodeMetadataAttribute(new String(value, StandardCharsets.UTF_8));
+        properties.put(xAttrName, xAttrValue);
+        if (qualifiedPath.isRoot()) {
+          abfsStore.setContainerMetadata(properties, tracingContext);
+        } else {
+          abfsStore.setBlobMetadata(qualifiedPath, properties, tracingContext);
+        }
+
+        return;
+      }
+
+      properties = abfsStore.getPathStatus(qualifiedPath, tracingContext);
       boolean xAttrExists = properties.containsKey(xAttrName);
       XAttrSetFlag.validate(name, xAttrExists, flag);
 
-      String xAttrValue = abfsStore.decodeAttribute(value);
+      xAttrValue = abfsStore.decodeAttribute(value);
       properties.put(xAttrName, xAttrValue);
       abfsStore.setPathProperties(qualifiedPath, properties, tracingContext);
     } catch (AzureBlobFileSystemException ex) {

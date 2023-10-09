@@ -41,6 +41,7 @@ public final class HttpQueryParams {
   public static final String QUERY_PARAM_UPN = "upn";
   public static final String QUERY_PARAM_BLOBTYPE = "blobtype";
   public static final String QUERY_PARAM_RESTYPE = "restype";
+  public static final String QUERY_PARAM_COMP = "comp";
 
   //query params for SAS
   public static final String QUERY_PARAM_SAOID = "saoid";
@@ -48,6 +49,7 @@ public final class HttpQueryParams {
   public static final String QUERY_PARAM_SUOID = "suoid";
   public static final String QUERY_PARAM_SIGNATURE = "sig";
   public static final String CONTAINER = "container";
+  public static final String QUERY_PARAM_INCLUDE_VALUE_METADATA = "metadata";
 
   private HttpQueryParams() {}
 }

@@ -61,9 +61,11 @@ public class DelegationSASGenerator extends SASGenerator {
       case SASTokenProvider.CREATE_CONTAINER_OPERATION:
       case SASTokenProvider.WRITE_OPERATION:
       case SASTokenProvider.SET_PROPERTIES_OPERATION:
+      case SASTokenProvider.SET_CONTAINER_METADATA_OPERATION:
         sp = "w";
         break;
       case SASTokenProvider.DELETE_OPERATION:
+      case SASTokenProvider.DELETE_CONTAINER_OPERATION:
         sp = "d";
         break;
       case SASTokenProvider.DELETE_RECURSIVE_OPERATION:
@@ -80,6 +82,7 @@ public class DelegationSASGenerator extends SASGenerator {
         sp = "l";
         break;
       case SASTokenProvider.GET_PROPERTIES_OPERATION:
+      case SASTokenProvider.GET_CONTAINER_METADATA_OPERATION:
       case SASTokenProvider.READ_OPERATION:
         sp = "r";
         break;

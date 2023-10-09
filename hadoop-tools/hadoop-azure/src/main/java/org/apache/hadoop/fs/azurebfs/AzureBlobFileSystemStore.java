@@ -55,6 +55,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.classification.VisibleForTesting;
+import org.apache.hadoop.fs.azurebfs.services.AbfsHttpHeader;
 import org.apache.hadoop.fs.azurebfs.services.PrefixMode;
 import org.apache.hadoop.fs.impl.BackReference;
 import org.apache.hadoop.util.Preconditions;
@@ -150,6 +151,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.TOKEN_VE
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_ABFS_ENDPOINT;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE_BUFFERED_PREAD_DISABLE;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE_IDENTITY_TRANSFORM_CLASS;
+import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X_MS_METADATA_PREFIX;
 
 /**
  * Provides the bridging logic between Hadoop's abstract filesystem and Azure Storage.
@@ -178,6 +180,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
   private final IdentityTransformerInterface identityTransformer;
   private final AbfsPerfTracker abfsPerfTracker;
   private final AbfsCounters abfsCounters;
+  private PrefixMode prefixMode;
 
   /**
    * The set of directories where we should store files as append blobs.
@@ -352,6 +355,13 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
       throw new InvalidUriException(errMsg);
     }
     return authorityParts;
+  }
+
+  public PrefixMode getPrefixMode() {
+    if (prefixMode == null) {
+      prefixMode = abfsConfiguration.getPrefixMode();
+    }
+    return prefixMode;
   }
 
   public boolean getIsNamespaceEnabled(TracingContext tracingContext)
@@ -773,6 +783,95 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
               tracingContext);
       perfInfo.registerResult(op.getResult()).registerSuccess(true);
     }
+  }
+
+  /**
+   * Gets user-defined properties(metadata) of the container over blob endpoint.
+   * @param tracingContext
+   * @return hashmap containing key value pairs for container metadata
+   * @throws AzureBlobFileSystemException
+   */
+  public Hashtable<String, String> getContainerMetadata(TracingContext tracingContext)
+          throws AzureBlobFileSystemException {
+    try (AbfsPerfInfo perfInfo = startTracking("getContainerMetadata", "getContainerMetadata")) {
+      LOG.debug("getContainerMetadata for filesystem: {}", client.getFileSystem());
+
+      return getAndParseContainerMetadata(tracingContext, perfInfo);
+    }
+  }
+
+  /**
+   * Sets user-defined properties(metadata) of the container over blob endpoint.
+   * @param metadata set of user-defined properties to be set
+   * @param tracingContext
+   * @throws AzureBlobFileSystemException
+   */
+  public void setContainerMetadata(final Hashtable<String, String> metadata,
+                                   TracingContext tracingContext) throws AzureBlobFileSystemException {
+    try (AbfsPerfInfo perfInfo = startTracking("setContainerMetadata", "setContainerMetadata")) {
+      LOG.debug("setContainerMetadata for filesystem: {} with properties: {}",
+              client.getFileSystem(),
+              metadata);
+
+      parseAndSetContainerMetadata(metadata, tracingContext, perfInfo);
+    }
+  }
+
+  /**
+   * User-Defined Properties over blob endpoint are actually response headers
+   * with prefix "x-ms-meta-". Each property is a different response header.
+   * This parses all the headers, removes the prefix and create a hashmap.
+   * @param result AbfsHttpOperation result containing response headers.
+   * @return Hashmap defining user defined metadata.
+   */
+  private Hashtable<String, String> parseResponseHeadersToHashTable(
+          AbfsHttpOperation result) {
+    final Hashtable<String, String> metadata = new Hashtable<>();
+    String name, value;
+
+    final Map<String, List<String>> responseHeaders = result.getResponseHeaders();
+    for (Map.Entry<String, List<String>> entry : responseHeaders.entrySet()) {
+      name = entry.getKey();
+
+      if (name != null && name.startsWith(X_MS_METADATA_PREFIX)) {
+        value = entry.getValue().get(0);
+        metadata.put(name.substring(X_MS_METADATA_PREFIX.length()), value);
+      }
+    }
+    return metadata;
+  }
+
+  /**
+   * User-defined properties over blob endpoint are required to be set
+   * as request header with prefix "x-ms-meta-". Each property need to be made
+   * into a different request header. This parses all the properties, add prefix
+   * and create request headers.
+   * @param metadata Hashmap
+   * @return List of request headers to be passed with API call.
+   */
+  private List<AbfsHttpHeader> getRequestHeadersForMetadata(Hashtable<String, String> metadata) {
+    final List<AbfsHttpHeader> headers = new ArrayList<AbfsHttpHeader>();
+
+    for(Map.Entry<String,String> entry : metadata.entrySet()) {
+      headers.add(new AbfsHttpHeader(X_MS_METADATA_PREFIX + entry.getKey(), entry.getValue()));
+    }
+    return headers;
+  }
+
+  private Hashtable<String, String> getAndParseContainerMetadata(TracingContext tracingContext,
+                                                                 AbfsPerfInfo perfInfo) throws AzureBlobFileSystemException{
+    final AbfsRestOperation op = client.getContainerMetadata(tracingContext);
+    perfInfo.registerResult(op.getResult()).registerSuccess(true);
+
+    return parseResponseHeadersToHashTable(op.getResult());
+  }
+
+  private void parseAndSetContainerMetadata(final Hashtable<String, String> metadata, TracingContext tracingContext,
+                                            AbfsPerfInfo perfInfo) throws AzureBlobFileSystemException{
+    final List<AbfsHttpHeader> metadataRequestHeaders = getRequestHeadersForMetadata(metadata);
+    final AbfsRestOperation op = client.setContainerMetadata(metadataRequestHeaders, tracingContext);
+
+    perfInfo.registerResult(op.getResult()).registerSuccess(true);
   }
 
   public AbfsInputStream openFileForRead(final Path path,

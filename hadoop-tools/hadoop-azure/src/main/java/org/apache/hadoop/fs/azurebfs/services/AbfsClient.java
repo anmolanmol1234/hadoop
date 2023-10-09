@@ -205,6 +205,19 @@ public class AbfsClient implements Closeable {
     return url;
   }
 
+  private URL changePrefixFromDfsToBlob(URL url) throws InvalidUriException {
+    if (url.toString().contains(WASB_DNS_PREFIX)
+            || getAbfsConfiguration().getPrefixMode() == PrefixMode.DFS) {
+      return url;
+    }
+    try {
+      url = new URL(url.toString().replace(ABFS_DNS_PREFIX, WASB_DNS_PREFIX));
+    } catch (MalformedURLException ex) {
+      throw new InvalidUriException(url.toString());
+    }
+    return url;
+  }
+
   private String getBase64EncodedString(String key) {
     return getBase64EncodedString(key.getBytes(StandardCharsets.UTF_8));
   }
@@ -453,6 +466,65 @@ public class AbfsClient implements Closeable {
     op.execute(tracingContext);
     return op;
   }
+
+  /**
+   * Caller of <a href = https://learn.microsoft.com/en-us/rest/api/storageservices/get-container-metadata?tabs=azure-ad></a>
+   * Gets user-defined properties(metadata) of the container(filesystem) over blob endpoint.
+   * @param tracingContext
+   * @return the user-defined properties on container path
+   * @throws AzureBlobFileSystemException
+   */
+  public AbfsRestOperation getContainerMetadata(TracingContext tracingContext)
+          throws AzureBlobFileSystemException {
+    final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
+
+    AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_RESTYPE, CONTAINER);
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_COMP, QUERY_PARAM_INCLUDE_VALUE_METADATA);
+
+    appendSASTokenToQuery("",
+            SASTokenProvider.GET_CONTAINER_METADATA_OPERATION, abfsUriQueryBuilder);
+
+    final URL url = createBlobRequestUrl(abfsUriQueryBuilder);
+
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.GetContainerMetadata, HTTP_METHOD_HEAD, url,
+            requestHeaders);
+    op.execute(tracingContext);
+    return op;
+  }
+
+  /**
+   * Caller of <a href = https://learn.microsoft.com/en-us/rest/api/storageservices/set-container-metadata?tabs=azure-ad></a>
+   * Sets user-defined properties(metadata) of the container(filesystem) over blob endpoint.
+   * @param metadataRequestHeaders
+   * @param tracingContext
+   * @throws AzureBlobFileSystemException
+   */
+  public AbfsRestOperation setContainerMetadata(List<AbfsHttpHeader> metadataRequestHeaders,
+                                                TracingContext tracingContext) throws AzureBlobFileSystemException {
+    // Request Header for this call will also contain metadata headers
+    final List<AbfsHttpHeader> defaultRequestHeaders = createDefaultHeaders();
+    final List<AbfsHttpHeader> requestHeaders = new ArrayList<AbfsHttpHeader>();
+    requestHeaders.addAll(defaultRequestHeaders);
+    requestHeaders.addAll(metadataRequestHeaders);
+
+    AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_RESTYPE, CONTAINER);
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_COMP, QUERY_PARAM_INCLUDE_VALUE_METADATA);
+
+    appendSASTokenToQuery("",
+            SASTokenProvider.SET_CONTAINER_METADATA_OPERATION, abfsUriQueryBuilder);
+
+    final URL url = createBlobRequestUrl(abfsUriQueryBuilder);
+
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.SetContainerMetadata, HTTP_METHOD_PUT, url,
+            requestHeaders);
+    op.execute(tracingContext);
+    return op;
+  }
+
 
   public AbfsRestOperation createPath(final String path, final boolean isFile, final boolean overwrite,
                                       final String permission, final String umask,
@@ -1437,6 +1509,19 @@ public class AbfsClient implements Closeable {
       }
     }
     return sasToken;
+  }
+
+  private URL createBlobRequestUrl(final AbfsUriQueryBuilder abfsUriQueryBuilder)
+          throws AzureBlobFileSystemException {
+    return changePrefixFromDfsToBlob(
+            createRequestUrl(abfsUriQueryBuilder.toString()));
+  }
+
+  private URL createBlobRequestUrl(final String path,
+                                   final AbfsUriQueryBuilder abfsUriQueryBuilder)
+          throws AzureBlobFileSystemException {
+    return changePrefixFromDfsToBlob(
+            createRequestUrl(path, abfsUriQueryBuilder.toString()));
   }
 
   private URL createRequestUrl(final String query) throws AzureBlobFileSystemException {
