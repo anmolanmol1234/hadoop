@@ -58,6 +58,7 @@ public class DelegationSASGenerator extends SASGenerator {
     switch (operation) {
       case SASTokenProvider.CREATE_FILE_OPERATION:
       case SASTokenProvider.CREATE_DIRECTORY_OPERATION:
+      case SASTokenProvider.CREATE_CONTAINER_OPERATION:
       case SASTokenProvider.WRITE_OPERATION:
       case SASTokenProvider.SET_PROPERTIES_OPERATION:
         sp = "w";
