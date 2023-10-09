@@ -431,30 +431,34 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
   }
 
   public Hashtable<String, String> getFilesystemProperties(
-      TracingContext tracingContext) throws AzureBlobFileSystemException {
+          TracingContext tracingContext) throws AzureBlobFileSystemException {
     try (AbfsPerfInfo perfInfo = startTracking("getFilesystemProperties",
             "getFilesystemProperties")) {
       LOG.debug("getFilesystemProperties for filesystem: {}",
               client.getFileSystem());
 
       final Hashtable<String, String> parsedXmsProperties;
+      final AbfsRestOperation op;
 
-      final AbfsRestOperation op = client
-          .getFilesystemProperties(tracingContext);
-      perfInfo.registerResult(op.getResult());
+      if (getPrefixMode() == PrefixMode.BLOB) {
+        parsedXmsProperties = getAndParseContainerMetadata(tracingContext, perfInfo);
 
+        return parsedXmsProperties;
+      }
+
+      op = client.getFilesystemProperties(tracingContext);
       final String xMsProperties = op.getResult().getResponseHeader(HttpHeaderConfigurations.X_MS_PROPERTIES);
 
       parsedXmsProperties = parseCommaSeparatedXmsProperties(xMsProperties);
-      perfInfo.registerSuccess(true);
-
+      perfInfo.registerResult(op.getResult()).registerSuccess(true);
       return parsedXmsProperties;
     }
   }
 
+
   public void setFilesystemProperties(
-      final Hashtable<String, String> properties, TracingContext tracingContext)
-      throws AzureBlobFileSystemException {
+          final Hashtable<String, String> properties, TracingContext tracingContext)
+          throws AzureBlobFileSystemException {
     if (properties == null || properties.isEmpty()) {
       LOG.trace("setFilesystemProperties no properties present");
       return;
@@ -466,6 +470,10 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
 
     try (AbfsPerfInfo perfInfo = startTracking("setFilesystemProperties",
             "setFilesystemProperties")) {
+      if (getPrefixMode() == PrefixMode.BLOB) {
+        parseAndSetContainerMetadata(properties, tracingContext, perfInfo);
+      }
+
       final String commaSeparatedProperties;
       try {
         commaSeparatedProperties = convertXmsPropertiesToCommaSeparatedString(properties);
@@ -474,7 +482,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
       }
 
       final AbfsRestOperation op = client
-          .setFilesystemProperties(commaSeparatedProperties, tracingContext);
+              .setFilesystemProperties(commaSeparatedProperties, tracingContext);
       perfInfo.registerResult(op.getResult()).registerSuccess(true);
     }
   }
