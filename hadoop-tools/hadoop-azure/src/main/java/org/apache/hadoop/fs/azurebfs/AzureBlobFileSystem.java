@@ -123,6 +123,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.BLOCK_UPLOAD_ACTIVE_BLOCKS_DEFAULT;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.DATA_BLOCKS_BUFFER_DEFAULT;
 import static org.apache.hadoop.fs.azurebfs.constants.InternalConstants.CAPABILITY_SAFE_READAHEAD;
+import static org.apache.hadoop.fs.azurebfs.utils.UriUtils.decodeMetadataAttribute;
 import static org.apache.hadoop.fs.azurebfs.utils.UriUtils.encodeMetadataAttribute;
 import static org.apache.hadoop.fs.impl.PathCapabilitiesSupport.validatePathCapabilityArgs;
 import static org.apache.hadoop.fs.statistics.IOStatisticsLogging.logIOStatisticsAtLevel;
@@ -1042,7 +1043,7 @@ public class AzureBlobFileSystem extends FileSystem
    */
   @Override
   public byte[] getXAttr(final Path path, final String name)
-      throws IOException {
+          throws IOException {
     LOG.debug("AzureBlobFileSystem.getXAttr path: {}", path);
 
     if (name == null || name.isEmpty()) {
@@ -1054,11 +1055,28 @@ public class AzureBlobFileSystem extends FileSystem
     byte[] value = null;
     try {
       TracingContext tracingContext = new TracingContext(clientCorrelationId,
-          fileSystemId, FSOperationType.GET_ATTR, true, tracingHeaderFormat,
-          listener);
-      Hashtable<String, String> properties = abfsStore
-          .getPathStatus(qualifiedPath, tracingContext);
+              fileSystemId, FSOperationType.GET_ATTR, true, tracingHeaderFormat,
+              listener);
+      Hashtable<String, String> properties;
       String xAttrName = ensureValidAttributeName(name);
+
+      if (abfsStore.getPrefixMode() == PrefixMode.BLOB) {
+        if (qualifiedPath.isRoot()) {
+          properties = abfsStore.getContainerMetadata(tracingContext);
+        } else {
+          properties = abfsStore.getBlobMetadata(qualifiedPath, tracingContext);
+        }
+
+        if (properties.containsKey(xAttrName)) {
+          String xAttrValue = properties.get(xAttrName);
+          value = decodeMetadataAttribute(xAttrValue).getBytes(
+                  StandardCharsets.UTF_8);
+        }
+        return value;
+      }
+
+      properties = abfsStore.getPathStatus(qualifiedPath, tracingContext);
+
       if (properties.containsKey(xAttrName)) {
         String xAttrValue = properties.get(xAttrName);
         value = abfsStore.encodeAttribute(xAttrValue);

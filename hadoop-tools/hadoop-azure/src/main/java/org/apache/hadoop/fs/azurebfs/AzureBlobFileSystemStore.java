@@ -1170,7 +1170,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
     } while (shouldContinue);
   }
 
-  public FileStatus getFileStatus(Path path, TracingContext tracingContext, boolean useBlobEndpoint) throws IOException {
+  public FileStatus getFileStatus(Path path, TracingContext tracingContext) throws IOException {
     AbfsPerfInfo perfInfo = startTracking("getFileStatus", "undetermined");
     boolean isNamespaceEnabled = getIsNamespaceEnabled(tracingContext);
     LOG.debug("getFileStatus filesystem: {} path: {} isNamespaceEnabled: {}",
@@ -1178,7 +1178,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
             path,
             isNamespaceEnabled);
     perfInfo.registerCallee("getPathProperty");
-    return getPathProperty(path, tracingContext, useBlobEndpoint);
+    return getPathProperty(path, tracingContext);
   }
 
   /**
@@ -1187,15 +1187,14 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
    * This does not segregate between implicit and explicit paths.
    * @param path Path to call the downstream get property method on
    * @param tracingContext Current tracing context for the call
-   * @param useBlobEndpoint Flag indicating whether to use blob endpoint
    * @return VersionedFileStatus object for given path
    * @throws IOException
    */
-  FileStatus getPathProperty(Path path, TracingContext tracingContext, Boolean useBlobEndpoint) throws IOException {
+  FileStatus getPathProperty(Path path, TracingContext tracingContext) throws IOException {
     AbfsPerfInfo perfInfo = startTracking("getPathProperty", "undetermined");
     final AbfsRestOperation op;
     Boolean isNamespaceEnabled = getIsNamespaceEnabled(tracingContext);
-    if (useBlobEndpoint) {
+    if (getPrefixMode() == PrefixMode.BLOB) {
       LOG.debug("getPathProperty filesystem call over blob endpoint: {} path: {} isNamespaceEnabled: {}",
               client.getFileSystem(),
               path,
@@ -1243,7 +1242,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
       resourceIsDir = true;
     } else {
       contentLength = parseContentLength(result.getResponseHeader(HttpHeaderConfigurations.CONTENT_LENGTH));
-      if (useBlobEndpoint) {
+      if (getPrefixMode() == PrefixMode.BLOB) {
         resourceIsDir = result.getResponseHeader(X_MS_META_HDI_ISFOLDER) != null;
       } else {
         resourceIsDir = parseIsDirectory(result.getResponseHeader(HttpHeaderConfigurations.X_MS_RESOURCE_TYPE));
