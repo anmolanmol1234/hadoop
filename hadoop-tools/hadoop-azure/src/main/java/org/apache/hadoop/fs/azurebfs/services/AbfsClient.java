@@ -1261,16 +1261,17 @@ public class AbfsClient implements Closeable {
     String sasTokenForReuse = appendSASTokenToQuery(path, SASTokenProvider.READ_OPERATION,
         abfsUriQueryBuilder, cachedSasToken);
 
-    final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
-    final AbfsRestOperation op = new AbfsRestOperation(
-            AbfsRestOperationType.ReadFile,
-            this,
-            HTTP_METHOD_GET,
-            url,
-            requestHeaders,
-            buffer,
-            bufferOffset,
-            bufferLength, sasTokenForReuse);
+    URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
+    final AbfsRestOperationType opType;
+    if (abfsConfiguration.getPrefixMode() == PrefixMode.BLOB) {
+      opType = AbfsRestOperationType.GetBlob;
+      url = changePrefixFromDfsToBlob(url);
+    } else {
+      opType = AbfsRestOperationType.ReadFile;
+    }
+    final AbfsRestOperation op = getAbfsRestOperation(opType, HTTP_METHOD_GET,
+            url, requestHeaders, buffer, bufferOffset, bufferLength,
+            sasTokenForReuse);
     op.execute(tracingContext);
 
     return op;
