@@ -152,6 +152,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_AB
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE_BUFFERED_PREAD_DISABLE;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE_IDENTITY_TRANSFORM_CLASS;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X_MS_METADATA_PREFIX;
+import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X_MS_META_HDI_ISFOLDER;
 
 /**
  * Provides the bridging logic between Hadoop's abstract filesystem and Azure Storage.
@@ -1169,16 +1170,49 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
     } while (shouldContinue);
   }
 
-  public FileStatus getFileStatus(final Path path,
-      TracingContext tracingContext) throws IOException {
-    try (AbfsPerfInfo perfInfo = startTracking("getFileStatus", "undetermined")) {
-      boolean isNamespaceEnabled = getIsNamespaceEnabled(tracingContext);
-      LOG.debug("getFileStatus filesystem: {} path: {} isNamespaceEnabled: {}",
+  public FileStatus getFileStatus(Path path, TracingContext tracingContext, boolean useBlobEndpoint) throws IOException {
+    AbfsPerfInfo perfInfo = startTracking("getFileStatus", "undetermined");
+    boolean isNamespaceEnabled = getIsNamespaceEnabled(tracingContext);
+    LOG.debug("getFileStatus filesystem: {} path: {} isNamespaceEnabled: {}",
+            client.getFileSystem(),
+            path,
+            isNamespaceEnabled);
+    perfInfo.registerCallee("getPathProperty");
+    return getPathProperty(path, tracingContext, useBlobEndpoint);
+  }
+
+  /**
+   * Method to make a call to get path property based on various configs-
+   * like whether to go over blob/dfs endpoint, whether path provided is root etc.
+   * This does not segregate between implicit and explicit paths.
+   * @param path Path to call the downstream get property method on
+   * @param tracingContext Current tracing context for the call
+   * @param useBlobEndpoint Flag indicating whether to use blob endpoint
+   * @return VersionedFileStatus object for given path
+   * @throws IOException
+   */
+  FileStatus getPathProperty(Path path, TracingContext tracingContext, Boolean useBlobEndpoint) throws IOException {
+    AbfsPerfInfo perfInfo = startTracking("getPathProperty", "undetermined");
+    final AbfsRestOperation op;
+    Boolean isNamespaceEnabled = getIsNamespaceEnabled(tracingContext);
+    if (useBlobEndpoint) {
+      LOG.debug("getPathProperty filesystem call over blob endpoint: {} path: {} isNamespaceEnabled: {}",
               client.getFileSystem(),
               path,
               isNamespaceEnabled);
 
-      final AbfsRestOperation op;
+      if (path.isRoot()) {
+        perfInfo.registerCallee("getContainerProperties");
+        op = client.getContainerProperty(tracingContext);
+      } else {
+        perfInfo.registerCallee("getBlobProperty");
+        op = client.getBlobProperty(path, tracingContext);
+      }
+    } else {
+      LOG.debug("getPathProperty filesystem call over dfs endpoint: {} path: {} isNamespaceEnabled: {}",
+              client.getFileSystem(),
+              path,
+              isNamespaceEnabled);
       if (path.isRoot()) {
         if (isNamespaceEnabled) {
           perfInfo.registerCallee("getAclStatus");
@@ -1191,52 +1225,56 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
         perfInfo.registerCallee("getPathStatus");
         op = client.getPathStatus(getRelativePath(path), false, tracingContext);
       }
+    }
 
-      perfInfo.registerResult(op.getResult());
-      final long blockSize = abfsConfiguration.getAzureBlockSize();
-      final AbfsHttpOperation result = op.getResult();
+    perfInfo.registerResult(op.getResult());
+    final long blockSize = abfsConfiguration.getAzureBlockSize();
+    final AbfsHttpOperation result = op.getResult();
 
-      String eTag = extractEtagHeader(result);
-      final String lastModified = result.getResponseHeader(HttpHeaderConfigurations.LAST_MODIFIED);
-      final String permissions = result.getResponseHeader((HttpHeaderConfigurations.X_MS_PERMISSIONS));
-      final boolean hasAcl = AbfsPermission.isExtendedAcl(permissions);
-      final long contentLength;
-      final boolean resourceIsDir;
+    String eTag = extractEtagHeader(result);
+    final String lastModified = result.getResponseHeader(HttpHeaderConfigurations.LAST_MODIFIED);
+    final String permissions = result.getResponseHeader((HttpHeaderConfigurations.X_MS_PERMISSIONS));
+    final boolean hasAcl = AbfsPermission.isExtendedAcl(permissions);
+    final long contentLength;
+    final boolean resourceIsDir;
 
-      if (path.isRoot()) {
-        contentLength = 0;
-        resourceIsDir = true;
+    if (path.isRoot()) {
+      contentLength = 0;
+      resourceIsDir = true;
+    } else {
+      contentLength = parseContentLength(result.getResponseHeader(HttpHeaderConfigurations.CONTENT_LENGTH));
+      if (useBlobEndpoint) {
+        resourceIsDir = result.getResponseHeader(X_MS_META_HDI_ISFOLDER) != null;
       } else {
-        contentLength = parseContentLength(result.getResponseHeader(HttpHeaderConfigurations.CONTENT_LENGTH));
         resourceIsDir = parseIsDirectory(result.getResponseHeader(HttpHeaderConfigurations.X_MS_RESOURCE_TYPE));
       }
-
-      final String transformedOwner = identityTransformer.transformIdentityForGetRequest(
-              result.getResponseHeader(HttpHeaderConfigurations.X_MS_OWNER),
-              true,
-              userName);
-
-      final String transformedGroup = identityTransformer.transformIdentityForGetRequest(
-              result.getResponseHeader(HttpHeaderConfigurations.X_MS_GROUP),
-              false,
-              primaryUserGroup);
-
-      perfInfo.registerSuccess(true);
-
-      return new VersionedFileStatus(
-              transformedOwner,
-              transformedGroup,
-              permissions == null ? new AbfsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL)
-                      : AbfsPermission.valueOf(permissions),
-              hasAcl,
-              contentLength,
-              resourceIsDir,
-              1,
-              blockSize,
-              DateTimeUtils.parseLastModifiedTime(lastModified),
-              path,
-              eTag);
     }
+
+    final String transformedOwner = identityTransformer.transformIdentityForGetRequest(
+            result.getResponseHeader(HttpHeaderConfigurations.X_MS_OWNER),
+            true,
+            userName);
+
+    final String transformedGroup = identityTransformer.transformIdentityForGetRequest(
+            result.getResponseHeader(HttpHeaderConfigurations.X_MS_GROUP),
+            false,
+            primaryUserGroup);
+
+    perfInfo.registerSuccess(true);
+
+    return new VersionedFileStatus(
+            transformedOwner,
+            transformedGroup,
+            permissions == null ? new AbfsPermission(FsAction.ALL, FsAction.ALL, FsAction.ALL)
+                    : AbfsPermission.valueOf(permissions),
+            hasAcl,
+            contentLength,
+            resourceIsDir,
+            1,
+            blockSize,
+            DateTimeUtils.parseLastModifiedTime(lastModified),
+            path,
+            eTag);
   }
 
   /**

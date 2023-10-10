@@ -469,6 +469,53 @@ public class AbfsClient implements Closeable {
   }
 
   /**
+   * @return the blob properties returned from server.
+   * @throws AzureBlobFileSystemException in case it is not a 404 error or some other exception
+   * which was not able to be retried.
+   * */
+  public AbfsRestOperation getBlobProperty(Path blobPath,
+                                           TracingContext tracingContext) throws AzureBlobFileSystemException {
+    AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
+    String blobRelativePath = blobPath.toUri().getPath();
+
+    appendSASTokenToQuery(blobRelativePath,
+            SASTokenProvider.GET_BLOB_PROPERTIES_OPERATION, abfsUriQueryBuilder);
+
+    final URL url = createBlobRequestUrl(blobRelativePath, abfsUriQueryBuilder);
+    final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
+
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.GetBlobProperties, HTTP_METHOD_HEAD, url,
+            requestHeaders);
+    op.execute(tracingContext);
+    return op;
+  }
+
+  /**
+   * Caller of <a href = https://learn.microsoft.com/en-us/rest/api/storageservices/get-container-properties?tabs=azure-ad></a>
+   * @return the container properties returned from server.
+   * @throws AzureBlobFileSystemException in case it is not a 404 error or some other exception
+   * which was not able to be retried.
+   * */
+  public AbfsRestOperation getContainerProperty(TracingContext tracingContext) throws AzureBlobFileSystemException {
+    final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
+
+    final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_RESTYPE, CONTAINER);
+
+    appendSASTokenToQuery("",
+            SASTokenProvider.GET_CONTAINER_PROPERTIES_OPERATION, abfsUriQueryBuilder);
+
+    final URL url = createBlobRequestUrl(abfsUriQueryBuilder);
+
+    final AbfsRestOperation op = getAbfsRestOperation(
+            AbfsRestOperationType.GetContainerProperties, HTTP_METHOD_HEAD, url,
+            requestHeaders);
+    op.execute(tracingContext);
+    return op;
+  }
+
+  /**
    * Caller of <a href = https://learn.microsoft.com/en-us/rest/api/storageservices/get-container-metadata?tabs=azure-ad></a>
    * Gets user-defined properties(metadata) of the container(filesystem) over blob endpoint.
    * @param tracingContext

@@ -84,7 +84,9 @@ public class DelegationSASGenerator extends SASGenerator {
         break;
       case SASTokenProvider.GET_PROPERTIES_OPERATION:
       case SASTokenProvider.GET_BLOB_METADATA_OPERATION:
+      case SASTokenProvider.GET_BLOB_PROPERTIES_OPERATION:
       case SASTokenProvider.GET_CONTAINER_METADATA_OPERATION:
+      case SASTokenProvider.GET_CONTAINER_PROPERTIES_OPERATION:
       case SASTokenProvider.READ_OPERATION:
         sp = "r";
         break;
