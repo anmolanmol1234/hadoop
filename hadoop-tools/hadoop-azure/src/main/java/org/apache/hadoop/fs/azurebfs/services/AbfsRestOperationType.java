@@ -46,5 +46,7 @@ public enum AbfsRestOperationType {
     CreateContainer,
     DeleteContainer,
     GetContainerMetadata,
-    SetContainerMetadata
+    SetContainerMetadata,
+    GetBlobMetadata,
+    SetBlobMetadata
 }

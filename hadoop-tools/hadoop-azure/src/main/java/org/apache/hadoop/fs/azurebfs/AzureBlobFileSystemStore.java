@@ -487,6 +487,51 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
     }
   }
 
+  /**
+   * Gets user-defined properties(metadata) of the blob over blob endpoint.
+   * @param path Path.
+   * @param tracingContext TracingContext.
+   * @return hashmap containing key value pairs for blob metadata
+   * @throws AzureBlobFileSystemException
+   */
+  public Hashtable<String, String> getBlobMetadata(final Path path,
+                                                   TracingContext tracingContext) throws AzureBlobFileSystemException {
+    try (AbfsPerfInfo perfInfo = startTracking("getBlobMetadata", "getBlobMetadata")) {
+      LOG.debug("getBlobMetadata for filesystem: {} path: {}",
+              client.getFileSystem(),
+              path);
+
+      final AbfsRestOperation op = client.getBlobMetadata(path, tracingContext);
+      perfInfo.registerResult(op.getResult()).registerSuccess(true);
+
+      final Hashtable<String, String> metadata = parseResponseHeadersToHashTable(op.getResult());
+      return metadata;
+    }
+  }
+
+  /**
+   * Sets user-defined properties(metadata) of the blob over blob endpoint.
+   * @param path on which metadata is to be set
+   * @param metadata set of user-defined properties to be set
+   * @param tracingContext TracingContext
+   * @throws AzureBlobFileSystemException
+   */
+  public void setBlobMetadata(final Path path,
+                              final Hashtable<String, String> metadata, TracingContext tracingContext)
+          throws AzureBlobFileSystemException {
+    try (AbfsPerfInfo perfInfo = startTracking("setBlobMetadata", "setBlobMetadata")) {
+      LOG.debug("setBlobMetadata for filesystem: {} path: {} with properties: {}",
+              client.getFileSystem(),
+              path,
+              metadata);
+
+      List<AbfsHttpHeader> metadataRequestHeaders = getRequestHeadersForMetadata(metadata);
+
+      final AbfsRestOperation op = client.setBlobMetadata(path, metadataRequestHeaders, tracingContext);
+      perfInfo.registerResult(op.getResult()).registerSuccess(true);
+    }
+  }
+
   public Hashtable<String, String> getPathStatus(final Path path,
       TracingContext tracingContext) throws AzureBlobFileSystemException {
     try (AbfsPerfInfo perfInfo = startTracking("getPathStatus", "getPathStatus")){
