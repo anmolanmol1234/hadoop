@@ -684,6 +684,8 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
       perfInfo.registerResult(op.getResult()).registerSuccess(true);
 
       AbfsLease lease = maybeCreateLease(relativePath, tracingContext);
+      String eTag = op.getResult().getResponseHeader(HttpHeaderConfigurations.ETAG);
+      checkAppendSmallWrite(isAppendBlob);
 
       return new AbfsOutputStream(
           populateAbfsOutputStreamContext(
@@ -693,6 +695,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
               statistics,
               relativePath,
               0,
+              eTag,
               tracingContext));
     }
   }
@@ -712,8 +715,9 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
                                                            final FileSystem.Statistics statistics, boolean isNamespaceEnabled, final FsPermission permission,
                                                            final FsPermission umask,
                                                            final boolean isAppendBlob,
-                                                           TracingContext tracingContext) throws AzureBlobFileSystemException {
+                                                           TracingContext tracingContext) throws IOException {
     AbfsRestOperation op;
+    VersionedFileStatus fileStatus;
     try {
       // Trigger a create with overwrite=false first so that eTag fetch can be
       // avoided for cases when no pre-existing file is present (major portion
@@ -725,7 +729,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
       if (e.getStatusCode() == HttpURLConnection.HTTP_CONFLICT) {
         // File pre-exists, fetch eTag
         try {
-          op = client.getPathStatus(relativePath, false, tracingContext);
+          fileStatus = (VersionedFileStatus) getFileStatus(new Path(relativePath), tracingContext);
         } catch (AbfsRestOperationException ex) {
           if (ex.getStatusCode() == HttpURLConnection.HTTP_NOT_FOUND) {
             // Is a parallel access case, as file which was found to be
@@ -738,8 +742,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
           }
         }
 
-        String eTag = op.getResult()
-            .getResponseHeader(HttpHeaderConfigurations.ETAG);
+        String eTag = fileStatus.getEtag();
 
         try {
           // overwrite only if eTag matches with the file properties fetched befpre
@@ -787,6 +790,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
       FileSystem.Statistics statistics,
       String path,
       long position,
+      String eTag,
       TracingContext tracingContext) {
     int bufferSize = abfsConfiguration.getWriteBufferSize();
     if (isAppendBlob && bufferSize > FileSystemConfigurations.APPENDBLOB_MAX_WRITE_BUFFER_SIZE) {
@@ -809,6 +813,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
             .withPosition(position)
             .withFsStatistics(statistics)
             .withPath(path)
+            .withETag(eTag)
             .withExecutorService(new SemaphoredDelegatingExecutor(boundedThreadPool,
                 blockOutputActiveBlocks, true))
             .withTracingContext(tracingContext)
@@ -936,58 +941,56 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
   }
 
   public AbfsInputStream openFileForRead(Path path,
-      final Optional<OpenFileParameters> parameters,
-      final FileSystem.Statistics statistics, TracingContext tracingContext)
-      throws IOException {
+                                         final Optional<OpenFileParameters> parameters,
+                                         final FileSystem.Statistics statistics, TracingContext tracingContext)
+          throws IOException {
     try (AbfsPerfInfo perfInfo = startTracking("openFileForRead",
-        "getPathStatus")) {
+            "getPathStatus")) {
       LOG.debug("openFileForRead filesystem: {} path: {}",
-          client.getFileSystem(), path);
+              client.getFileSystem(), path);
 
-      FileStatus fileStatus = parameters.map(OpenFileParameters::getStatus)
-          .orElse(null);
+      FileStatus parameterFileStatus = parameters.map(OpenFileParameters::getStatus)
+              .orElse(null);
       String relativePath = getRelativePath(path);
-      String resourceType, eTag;
-      long contentLength;
-      if (fileStatus instanceof VersionedFileStatus) {
-        path = path.makeQualified(this.uri, path);
-        Preconditions.checkArgument(fileStatus.getPath().equals(path),
-            String.format(
-                "Filestatus path [%s] does not match with given path [%s]",
-                fileStatus.getPath(), path));
-        resourceType = fileStatus.isFile() ? FILE : DIRECTORY;
-        contentLength = fileStatus.getLen();
-        eTag = ((VersionedFileStatus) fileStatus).getVersion();
+
+      final VersionedFileStatus fileStatus;
+      if (parameterFileStatus instanceof VersionedFileStatus) {
+        Preconditions.checkArgument(parameterFileStatus.getPath()
+                        .equals(path.makeQualified(this.uri, path)),
+                String.format(
+                        "Filestatus path [%s] does not match with given path [%s]",
+                        parameterFileStatus.getPath(), path));
+        fileStatus = (VersionedFileStatus) parameterFileStatus;
       } else {
-        if (fileStatus != null) {
-          LOG.debug(
-              "Fallback to getPathStatus REST call as provided filestatus "
-                  + "is not of type VersionedFileStatus");
+        if (parameterFileStatus != null) {
+          LOG.warn(
+                  "Fallback to getPathStatus REST call as provided filestatus "
+                          + "is not of type VersionedFileStatus");
         }
-        AbfsHttpOperation op = client.getPathStatus(relativePath, false,
-            tracingContext).getResult();
-        resourceType = op.getResponseHeader(
-            HttpHeaderConfigurations.X_MS_RESOURCE_TYPE);
-        contentLength = Long.parseLong(
-            op.getResponseHeader(HttpHeaderConfigurations.CONTENT_LENGTH));
-        eTag = op.getResponseHeader(HttpHeaderConfigurations.ETAG);
+        fileStatus = (VersionedFileStatus) getFileStatus(path, tracingContext);
       }
 
-      if (parseIsDirectory(resourceType)) {
+      boolean isDirectory = fileStatus.isDirectory();
+
+      final long contentLength = fileStatus.getLen();
+      final String eTag = fileStatus.getEtag();
+
+      if (isDirectory) {
         throw new AbfsRestOperationException(
-            AzureServiceErrorCode.PATH_NOT_FOUND.getStatusCode(),
-            AzureServiceErrorCode.PATH_NOT_FOUND.getErrorCode(),
-            "openFileForRead must be used with files and not directories",
-            null);
+                AzureServiceErrorCode.PATH_NOT_FOUND.getStatusCode(),
+                AzureServiceErrorCode.PATH_NOT_FOUND.getErrorCode(),
+                "openFileForRead must be used with files and not directories." +
+                        "Attempt made for read on explicit directory.",
+                null);
       }
 
       perfInfo.registerSuccess(true);
 
       // Add statistics for InputStream
       return new AbfsInputStream(client, statistics, relativePath,
-          contentLength, populateAbfsInputStreamContext(
-          parameters.map(OpenFileParameters::getOptions)),
-          eTag, tracingContext);
+              contentLength, populateAbfsInputStreamContext(
+              parameters.map(OpenFileParameters::getOptions)),
+              eTag, tracingContext);
     }
   }
 
@@ -1014,8 +1017,8 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
   }
 
   public OutputStream openFileForWrite(final Path path,
-      final FileSystem.Statistics statistics, final boolean overwrite,
-      TracingContext tracingContext) throws IOException {
+                                       final FileSystem.Statistics statistics, final boolean overwrite,
+                                       TracingContext tracingContext) throws IOException {
     try (AbfsPerfInfo perfInfo = startTracking("openFileForWrite", "getPathStatus")) {
       LOG.debug("openFileForWrite filesystem: {} path: {} overwrite: {}",
               client.getFileSystem(),
@@ -1023,19 +1026,17 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
               overwrite);
 
       String relativePath = getRelativePath(path);
+      VersionedFileStatus fileStatus;
+      fileStatus = (VersionedFileStatus) getFileStatus(path, tracingContext);
 
-      final AbfsRestOperation op = client
-          .getPathStatus(relativePath, false, tracingContext);
-      perfInfo.registerResult(op.getResult());
+      final Long contentLength = fileStatus.getLen();
 
-      final String resourceType = op.getResult().getResponseHeader(HttpHeaderConfigurations.X_MS_RESOURCE_TYPE);
-      final Long contentLength = Long.valueOf(op.getResult().getResponseHeader(HttpHeaderConfigurations.CONTENT_LENGTH));
-
-      if (parseIsDirectory(resourceType)) {
+      boolean isDirectory = fileStatus.isDirectory();
+      if (isDirectory) {
         throw new AbfsRestOperationException(
                 AzureServiceErrorCode.PATH_NOT_FOUND.getStatusCode(),
                 AzureServiceErrorCode.PATH_NOT_FOUND.getErrorCode(),
-                "openFileForRead must be used with files and not directories",
+                "openFileForWrite must be used with files and not directories",
                 null);
       }
 
@@ -1049,16 +1050,30 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
       }
 
       AbfsLease lease = maybeCreateLease(relativePath, tracingContext);
+      final String eTag = fileStatus.getEtag();
+      checkAppendSmallWrite(isAppendBlob);
 
       return new AbfsOutputStream(
-          populateAbfsOutputStreamContext(
-              isAppendBlob,
-              lease,
-              client,
-              statistics,
-              relativePath,
-              offset,
-              tracingContext));
+              populateAbfsOutputStreamContext(
+                      isAppendBlob,
+                      lease,
+                      client,
+                      statistics,
+                      relativePath,
+                      offset,
+                      eTag,
+                      tracingContext));
+    }
+  }
+
+  public void checkAppendSmallWrite(boolean isAppendBlob) throws IOException {
+    if (getAbfsConfiguration().getPrefixMode() == PrefixMode.BLOB) {
+      if (isAppendBlob) {
+        throw new IOException("AppendBlob is not supported for blob endpoint.");
+      }
+      if (abfsConfiguration.isSmallWriteOptimizationEnabled()) {
+        throw new IOException("Small write optimization is not supported for blob endpoint.");
+      }
     }
   }
 

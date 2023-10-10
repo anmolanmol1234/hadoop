@@ -66,6 +66,8 @@ public class AbfsOutputStreamContext extends AbfsStreamContext {
 
   private TracingContext tracingContext;
 
+  private String eTag;
+
   /** A BackReference to the FS instance that created this OutputStream. */
   private BackReference fsBackRef;
 
@@ -158,6 +160,12 @@ public class AbfsOutputStreamContext extends AbfsStreamContext {
   public AbfsOutputStreamContext withTracingContext(
       final TracingContext tracingContext) {
     this.tracingContext = tracingContext;
+    return this;
+  }
+
+  public AbfsOutputStreamContext withETag(
+          final String eTag) {
+    this.eTag = eTag;
     return this;
   }
 
