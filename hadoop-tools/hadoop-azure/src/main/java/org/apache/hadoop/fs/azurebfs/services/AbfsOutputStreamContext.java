@@ -283,4 +283,8 @@ public class AbfsOutputStreamContext extends AbfsStreamContext {
   public BackReference getFsBackRef() {
     return fsBackRef;
   }
+
+  public String getETag() {
+    return eTag;
+  }
 }

@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.azurebfs.services;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.hadoop.fs.store.DataBlocks;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
@@ -29,7 +30,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.B
 /**
  * Return activeBlock with blockId.
  */
-public class AbfsBlock {
+public class AbfsBlock implements Closeable {
 
     DataBlocks.DataBlock activeBlock;
     String blockId;
@@ -122,4 +123,10 @@ public class AbfsBlock {
     public int remainingCapacity() {
         return activeBlock.remainingCapacity();
     }
+
+    @Override
+    public void close() throws IOException {
+        activeBlock.close();
+    }
+
 }
