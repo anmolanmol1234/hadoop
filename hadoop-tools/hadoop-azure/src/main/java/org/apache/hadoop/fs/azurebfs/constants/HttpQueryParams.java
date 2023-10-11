@@ -42,6 +42,8 @@ public final class HttpQueryParams {
   public static final String QUERY_PARAM_BLOBTYPE = "blobtype";
   public static final String QUERY_PARAM_RESTYPE = "restype";
   public static final String QUERY_PARAM_COMP = "comp";
+  public static final String QUERY_PARAM_BLOCKID = "blockid";
+  public static final String QUERY_PARAM_BLOCKLISTTYPE = "blocklisttype";
 
   //query params for SAS
   public static final String QUERY_PARAM_SAOID = "saoid";

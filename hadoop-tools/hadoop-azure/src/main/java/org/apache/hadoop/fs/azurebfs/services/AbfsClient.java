@@ -259,7 +259,8 @@ public class AbfsClient implements Closeable {
     final List<AbfsHttpHeader> requestHeaders = new ArrayList<AbfsHttpHeader>();
     requestHeaders.add(new AbfsHttpHeader(X_MS_VERSION, xMsVersion));
     requestHeaders.add(new AbfsHttpHeader(ACCEPT, APPLICATION_JSON
-            + COMMA + SINGLE_WHITE_SPACE + APPLICATION_OCTET_STREAM));
+            + COMMA + SINGLE_WHITE_SPACE + APPLICATION_OCTET_STREAM
+            + COMMA + SINGLE_WHITE_SPACE + APPLICATION_XML));
     requestHeaders.add(new AbfsHttpHeader(ACCEPT_CHARSET,
             UTF_8));
     requestHeaders.add(new AbfsHttpHeader(CONTENT_TYPE, EMPTY_STRING));
@@ -1094,6 +1095,88 @@ public class AbfsClient implements Closeable {
   }
 
   /**
+   * Append operation for blob endpoint which takes block id as a param.
+   * @param blockId The blockId of the block to be appended.
+   * @param path The path at which the block is to be appended.
+   * @param buffer The buffer which has the data to be appended.
+   * @param reqParams The request params.
+   * @param cachedSasToken The cachedSasToken if available.
+   * @param tracingContext Tracing context of the operation.
+   * @param eTag Etag of the blob to prevent parallel writer situations.
+   * @return AbfsRestOperation op.
+   * @throws AzureBlobFileSystemException
+   */
+  public AbfsRestOperation append(final String blockId, final String path, final byte[] buffer,
+                                  AppendRequestParameters reqParams, final String cachedSasToken,
+                                  TracingContext tracingContext, String eTag)
+          throws AzureBlobFileSystemException {
+    final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
+    if (reqParams.getLeaseId() != null) {
+      requestHeaders.add(new AbfsHttpHeader(X_MS_LEASE_ID, reqParams.getLeaseId()));
+    }
+    if (reqParams.isExpectHeaderEnabled()) {
+      requestHeaders.add(new AbfsHttpHeader(EXPECT, HUNDRED_CONTINUE));
+    }
+    final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_COMP, BLOCK);
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_BLOCKID, blockId);
+    requestHeaders.add(new AbfsHttpHeader(CONTENT_LENGTH, String.valueOf(buffer.length)));
+    requestHeaders.add(new AbfsHttpHeader(IF_MATCH, eTag));
+
+    if (reqParams.isRetryDueToExpect()) {
+      String userAgentRetry = userAgent;
+      userAgentRetry = userAgentRetry.replace(HUNDRED_CONTINUE_USER_AGENT, EMPTY_STRING);
+      requestHeaders.removeIf(header -> header.getName().equalsIgnoreCase(USER_AGENT));
+      requestHeaders.add(new AbfsHttpHeader(USER_AGENT, userAgentRetry));
+    }
+
+    // AbfsInputStream/AbfsOutputStream reuse SAS tokens for better performance
+    String sasTokenForReuse = appendSASTokenToQuery(path, SASTokenProvider.WRITE_OPERATION,
+            abfsUriQueryBuilder, cachedSasToken);
+
+    final URL url = createBlobRequestUrl(path, abfsUriQueryBuilder);
+    final AbfsRestOperation op = getPutBlockOperation(buffer, reqParams, requestHeaders,
+            sasTokenForReuse, url);
+    try {
+      op.execute(tracingContext);
+    } catch (AzureBlobFileSystemException e) {
+      /*
+         If the http response code indicates a user error we retry
+         the same append request with expect header being disabled.
+         When "100-continue" header is enabled but a non Http 100 response comes,
+         the response message might not get set correctly by the server.
+         So, this handling is to avoid breaking of backward compatibility
+         if someone has taken dependency on the exception message,
+         which is created using the error string present in the response header.
+      */
+      int responseStatusCode = ((AbfsRestOperationException) e).getStatusCode();
+      if (checkUserErrorBlob(responseStatusCode) && reqParams.isExpectHeaderEnabled()) {
+        LOG.debug("User error, retrying without 100 continue enabled for the given path {}", path);
+        reqParams.setExpectHeaderEnabled(false);
+        reqParams.setRetryDueToExpect(true);
+        return this.append(blockId, path, buffer, reqParams, cachedSasToken,
+                tracingContext, eTag);
+      }
+      else {
+        throw e;
+      }
+    }
+    return op;
+  }
+
+  @VisibleForTesting
+  AbfsRestOperation getPutBlockOperation(final byte[] buffer,
+                                         final AppendRequestParameters reqParams,
+                                         final List<AbfsHttpHeader> requestHeaders,
+                                         final String sasTokenForReuse,
+                                         final URL url) {
+    return getAbfsRestOperation(AbfsRestOperationType.PutBlock, HTTP_METHOD_PUT,
+            url,
+            requestHeaders, buffer, reqParams.getoffset(), reqParams.getLength(),
+            sasTokenForReuse);
+  }
+
+  /**
    * Returns the rest operation for append.
    * @param operationType The AbfsRestOperationType.
    * @param httpMethod specifies the httpMethod.
@@ -1133,6 +1216,19 @@ public class AbfsClient implements Closeable {
   private boolean checkUserError(int responseStatusCode) {
     return (responseStatusCode >= HttpURLConnection.HTTP_BAD_REQUEST
         && responseStatusCode < HttpURLConnection.HTTP_INTERNAL_ERROR);
+  }
+
+  /**
+   * Returns true if the status code lies in the range of user error.
+   * In the case of HTTP_CONFLICT for PutBlockList we fallback to DFS and hence
+   * this retry handling is not needed.
+   * @param responseStatusCode http response status code.
+   * @return True or False.
+   */
+  private boolean checkUserErrorBlob(int responseStatusCode) {
+    return (responseStatusCode >= HttpURLConnection.HTTP_BAD_REQUEST
+            && responseStatusCode < HttpURLConnection.HTTP_INTERNAL_ERROR
+            && responseStatusCode != HttpURLConnection.HTTP_CONFLICT);
   }
 
   // For AppendBlob its possible that the append succeeded in the backend but the request failed.
@@ -1191,6 +1287,54 @@ public class AbfsClient implements Closeable {
     return op;
   }
 
+  /**
+   * The flush operation to commit the blocks.
+   * @param buffer This has the xml in byte format with the blockIds to be flushed.
+   * @param path The path to flush the data to.
+   * @param isClose True when the stream is closed.
+   * @param cachedSasToken The cachedSasToken if available.
+   * @param leaseId The leaseId of the blob if available.
+   * @param eTag The etag of the blob.
+   * @param tracingContext Tracing context for the operation.
+   * @return AbfsRestOperation op.
+   * @throws IOException
+   */
+  public AbfsRestOperation flush(byte[] buffer, final String path, boolean isClose,
+                                 final String cachedSasToken, final String leaseId, String eTag,
+                                 TracingContext tracingContext) throws IOException {
+    final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
+    if (leaseId != null) {
+      requestHeaders.add(new AbfsHttpHeader(X_MS_LEASE_ID, leaseId));
+    }
+
+    final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_COMP, BLOCKLIST);
+    requestHeaders.add(new AbfsHttpHeader(CONTENT_LENGTH, String.valueOf(buffer.length)));
+    requestHeaders.add(new AbfsHttpHeader(CONTENT_TYPE, APPLICATION_XML));
+    requestHeaders.add(new AbfsHttpHeader(IF_MATCH, eTag));
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_CLOSE, String.valueOf(isClose));
+    // AbfsInputStream/AbfsOutputStream reuse SAS tokens for better performance
+    String sasTokenForReuse = appendSASTokenToQuery(path, SASTokenProvider.WRITE_OPERATION,
+            abfsUriQueryBuilder, cachedSasToken);
+
+    final URL url = createBlobRequestUrl(path, abfsUriQueryBuilder);
+    final AbfsRestOperation op = getPutBlockListOperation(buffer,
+            requestHeaders, sasTokenForReuse,
+            url);
+    op.execute(tracingContext);
+    return op;
+  }
+
+  @VisibleForTesting
+  AbfsRestOperation getPutBlockListOperation(final byte[] buffer,
+                                             final List<AbfsHttpHeader> requestHeaders,
+                                             final String sasTokenForReuse,
+                                             final URL url) {
+    return getAbfsRestOperation(AbfsRestOperationType.PutBlockList,
+            HTTP_METHOD_PUT, url, requestHeaders, buffer, 0, buffer.length,
+            sasTokenForReuse);
+  }
+
   public AbfsRestOperation setPathProperties(final String path, final String properties,
                                              TracingContext tracingContext)
       throws AzureBlobFileSystemException {
@@ -1241,6 +1385,34 @@ public class AbfsClient implements Closeable {
             AbfsRestOperationType.GetPathStatus,
             this,
             HTTP_METHOD_HEAD,
+            url,
+            requestHeaders);
+    op.execute(tracingContext);
+    return op;
+  }
+
+  /**
+   * GetBlockList call to the backend to get the list of committed blockId's.
+   * @param path The path to get the list of blockId's.
+   * @param tracingContext The tracing context for the operation.
+   * @return AbfsRestOperation op.
+   * @throws AzureBlobFileSystemException
+   */
+  public AbfsRestOperation getBlockList(final String path, TracingContext tracingContext) throws AzureBlobFileSystemException {
+    final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
+
+    final AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
+    String operation = SASTokenProvider.GET_BLOCK_LIST;
+    appendSASTokenToQuery(path, operation, abfsUriQueryBuilder);
+
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_COMP, BLOCKLIST);
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_BLOCKLISTTYPE, COMMITTED);
+    final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
+
+    final AbfsRestOperation op = new AbfsRestOperation(
+            AbfsRestOperationType.GetBlockList,
+            this,
+            HTTP_METHOD_GET,
             url,
             requestHeaders);
     op.execute(tracingContext);

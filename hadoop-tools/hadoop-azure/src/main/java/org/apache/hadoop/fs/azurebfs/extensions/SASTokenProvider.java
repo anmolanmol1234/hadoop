@@ -57,6 +57,7 @@ public interface SASTokenProvider {
   String SET_BLOB_METADATA_OPERATION = "set-blob-metadata";
   String GET_CONTAINER_PROPERTIES_OPERATION = "get-container-properties";
   String GET_BLOB_PROPERTIES_OPERATION = "get-blob-properties";
+  String GET_BLOCK_LIST = "get-block-list";
 
   /**
    * Initialize authorizer for Azure Blob File System.
