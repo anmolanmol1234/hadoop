@@ -23,12 +23,20 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
 
+import com.google.common.annotations.VisibleForTesting;
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.fs.azurebfs.utils.UriUtils;
 import org.apache.hadoop.security.ssl.DelegatingSSLSocketFactory;
 
@@ -38,11 +46,28 @@ import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.xml.sax.SAXException;
 
 import org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants;
 import org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations;
 import org.apache.hadoop.fs.azurebfs.contracts.services.AbfsPerfLoggable;
 import org.apache.hadoop.fs.azurebfs.contracts.services.ListResultSchema;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOCKLIST;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOCK_NAME;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOB_ERROR_CODE_END_XML;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOB_ERROR_CODE_START_XML;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.COMMITTED_BLOCKS;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.EQUAL;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOB_ERROR_MESSAGE_END_XML;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOB_ERROR_MESSAGE_START_XML;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.NAME;
+import static org.apache.hadoop.fs.azurebfs.constants.FileSystemUriSchemes.WASB_DNS_PREFIX;
+import static org.apache.hadoop.fs.azurebfs.constants.HttpQueryParams.QUERY_PARAM_COMP;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.COMP_LIST;
 
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HUNDRED_CONTINUE;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.EXPECT;
@@ -60,7 +85,6 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
 
   private static final int ONE_THOUSAND = 1000;
   private static final int ONE_MILLION = ONE_THOUSAND * ONE_THOUSAND;
-
   private final String method;
   private final URL url;
   private String maskedUrl;
@@ -84,6 +108,24 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
   private long sendRequestTimeMs;
   private long recvResponseTimeMs;
   private boolean shouldMask = false;
+  private List<String> blockIdList = new ArrayList<>();
+  private BlobList blobList;
+
+  private static final ThreadLocal<SAXParser> saxParserThreadLocal
+      = new ThreadLocal<SAXParser>() {
+    @Override
+    public SAXParser initialValue() {
+      SAXParserFactory factory = SAXParserFactory.newInstance();
+      factory.setNamespaceAware(true);
+      try {
+        return factory.newSAXParser();
+      } catch (SAXException e) {
+        throw new RuntimeException("Unable to create SAXParser", e);
+      } catch (ParserConfigurationException e) {
+        throw new RuntimeException("Check parser configuration", e);
+      }
+    }
+  };
 
   public static AbfsHttpOperation getAbfsHttpOperationWithFixedResult(
       final URL url,
@@ -141,6 +183,10 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
         .getRequestProperty(HttpHeaderConfigurations.X_MS_CLIENT_REQUEST_ID);
   }
 
+  public String getRequestHeaderValue(String requestHeader) {
+    return connection.getRequestProperty(requestHeader);
+  }
+
   public String getExpectedAppendPos() {
     return expectedAppendPos;
   }
@@ -175,6 +221,14 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
 
   public Map<String, List<String>> getResponseHeaders() {
     return connection.getHeaderFields();
+  }
+
+  public List<String> getBlockIdList() {
+    return blockIdList;
+  }
+
+  public BlobList getBlobList() {
+    return blobList;
   }
 
   // Returns a trace message for the request
@@ -395,7 +449,7 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
     startTime = System.nanoTime();
 
     if (statusCode >= HttpURLConnection.HTTP_BAD_REQUEST) {
-      processStorageErrorResponse();
+      processServerErrorResponse();
       this.recvResponseTimeMs += elapsedTimeMs(startTime);
       this.bytesReceived = this.connection.getHeaderFieldLong(HttpHeaderConfigurations.CONTENT_LENGTH, 0);
     } else {
@@ -411,7 +465,13 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
         // this is a list operation and need to retrieve the data
         // need a better solution
         if (AbfsHttpConstants.HTTP_METHOD_GET.equals(this.method) && buffer == null) {
-          parseListFilesResponse(stream);
+          if (url.toString().contains(QUERY_PARAM_COMP + EQUAL + BLOCKLIST)) {
+            parseBlockListResponse(stream);
+          } else if (url.toString().contains(COMP_LIST)) {
+            parseListBlobResponse(stream);
+          } else {
+            parseListFilesResponse(stream);
+          }
         } else {
           if (buffer != null) {
             while (totalBytesRead < length) {
@@ -433,10 +493,12 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
           }
         }
       } catch (IOException ex) {
-        LOG.warn("IO/Network error: {} {}: {}",
-            method, getMaskedUrl(), ex.getMessage());
-        LOG.debug("IO Error: ", ex);
+        LOG.error("UnexpectedError: ", ex);
         throw ex;
+      } catch (ParserConfigurationException e) {
+        throw new RuntimeException("Check parser configuration", e);
+      } catch (SAXException e) {
+        throw new RuntimeException("SAX parser exception", e);
       } finally {
         this.recvResponseTimeMs += elapsedTimeMs(startTime);
         this.bytesReceived = totalBytesRead;
@@ -444,8 +506,90 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
     }
   }
 
+  @VisibleForTesting
+  void processServerErrorResponse() throws IOException {
+    if (getBaseUrl().contains(WASB_DNS_PREFIX)) {
+      processBlobStorageErrorResponse();
+    } else {
+      processDfsStorageErrorResponse();
+    }
+  }
+
+  /**
+   * Parse the stream from the response and set {@link #blobList} field of this
+   * class.
+   *
+   * @param stream inputStream from the server-response.
+   */
+  private void parseListBlobResponse(final InputStream stream) {
+    try {
+      final SAXParser saxParser = saxParserThreadLocal.get();
+      saxParser.reset();
+      BlobList blobList = new BlobList();
+      saxParser.parse(stream, new BlobListXmlParser(blobList, getBaseUrl()));
+      this.blobList = blobList;
+    } catch (SAXException | IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private String getBaseUrl() {
+    String urlStr = url.toString();
+    int queryParamStart = urlStr.indexOf("?");
+    if (queryParamStart == -1) {
+      return urlStr;
+    }
+    return urlStr.substring(0, queryParamStart);
+  }
+
   public void setRequestProperty(String key, String value) {
     this.connection.setRequestProperty(key, value);
+  }
+
+  @VisibleForTesting
+  void setConnection(HttpURLConnection connection) {
+    this.connection = connection;
+  }
+
+  /**
+   * Parses the get block list response and returns list of committed blocks.
+   *
+   * @param stream InputStream contains the list results.
+   * @throws IOException, ParserConfigurationException, SAXException
+   */
+  private void parseBlockListResponse(final InputStream stream) throws IOException, ParserConfigurationException, SAXException {
+    if (stream == null) {
+      return;
+    }
+
+    if (blockIdList.size() != 0) {
+      // already parsed the response
+      return;
+    }
+
+    // Convert the input stream to a Document object
+    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    Document doc = factory.newDocumentBuilder().parse(stream);
+
+// Find the CommittedBlocks element and extract the list of block IDs
+    NodeList committedBlocksList = doc.getElementsByTagName(COMMITTED_BLOCKS);
+    if (committedBlocksList.getLength() > 0) {
+      Node committedBlocks = committedBlocksList.item(0);
+      NodeList blockList = committedBlocks.getChildNodes();
+      for (int i = 0; i < blockList.getLength(); i++) {
+        Node block = blockList.item(i);
+        if (block.getNodeName().equals(BLOCK_NAME)) {
+          NodeList nameList = block.getChildNodes();
+          for (int j = 0; j < nameList.getLength(); j++) {
+            Node name = nameList.item(j);
+            if (name.getNodeName().equals(NAME)) {
+              String blockId = name.getTextContent();
+              blockIdList.add(blockId);
+            }
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -479,13 +623,13 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
    * }
    *
    */
-  private void processStorageErrorResponse() {
-    try (InputStream stream = connection.getErrorStream()) {
+  private void processDfsStorageErrorResponse() {
+    try (InputStream stream = getConnectionErrorStream()) {
       if (stream == null) {
         return;
       }
       JsonFactory jf = new JsonFactory();
-      try (JsonParser jp = jf.createParser(stream)) {
+      try (JsonParser jp = jf.createJsonParser(stream)) {
         String fieldName, fieldValue;
         jp.nextToken();  // START_OBJECT - {
         jp.nextToken();  // FIELD_NAME - "error":
@@ -519,6 +663,48 @@ public class AbfsHttpOperation implements AbfsPerfLoggable {
       // or for other reasons have an unexpected
       LOG.debug("ExpectedError: ", ex);
     }
+  }
+
+  /**
+   * Extract errorCode and errorMessage from errorStream populated by server.
+   * Error-message in the form of:
+   * <pre>
+   *   {@code
+   *   <?xml version="1.0" encoding="utf-8"?>
+   *   <Error>
+   *      <Code>string-value</Code>
+   *      <Message>string-value</Message>
+   *   </Error>
+   * }
+   * </pre>
+   * <a href= "https://learn.microsoft.com/en-us/rest/api/storageservices/status-and-error-codes2">
+   *   Reference</a>
+   */
+  private void processBlobStorageErrorResponse() throws IOException {
+    InputStream errorStream = getConnectionErrorStream();
+    if (errorStream == null) {
+      return;
+    }
+    final String data = IOUtils.toString(errorStream, StandardCharsets.UTF_8);
+
+    int codeStartFirstInstance = data.indexOf(BLOB_ERROR_CODE_START_XML);
+    int codeEndFirstInstance = data.indexOf(BLOB_ERROR_CODE_END_XML);
+    if (codeEndFirstInstance != -1 && codeStartFirstInstance != -1) {
+      storageErrorCode = data.substring(codeStartFirstInstance,
+          codeEndFirstInstance).replace(BLOB_ERROR_CODE_START_XML, "");
+    }
+
+    int msgStartFirstInstance = data.indexOf(BLOB_ERROR_MESSAGE_START_XML);
+    int msgEndFirstInstance = data.indexOf(BLOB_ERROR_MESSAGE_END_XML);
+    if (msgEndFirstInstance != -1 && msgStartFirstInstance != -1) {
+      storageErrorMessage = data.substring(msgStartFirstInstance,
+          msgEndFirstInstance).replace(BLOB_ERROR_MESSAGE_START_XML, "");
+    }
+  }
+
+  @VisibleForTesting
+  InputStream getConnectionErrorStream() {
+    return connection.getErrorStream();
   }
 
   /**
