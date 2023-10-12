@@ -62,6 +62,7 @@ public class TracingContext {
   private Listener listener = null;  // null except when testing
   //final concatenated ID list set into x-ms-client-request-id header
   private String header = EMPTY_STRING;
+  private String fallbackDFSAppend = "B";
 
   /**
    * If {@link #primaryRequestId} is null, this field shall be set equal
@@ -161,6 +162,10 @@ public class TracingContext {
     this.listener = listener;
   }
 
+  public void setFallbackDFSAppend(String fallbackDFSAppend) {
+    this.fallbackDFSAppend = fallbackDFSAppend;
+  }
+
   /**
    * Concatenate all identifiers separated by (:) into a string and set into
    * X_MS_CLIENT_REQUEST_ID header of the http operation
@@ -176,7 +181,7 @@ public class TracingContext {
       header =
           clientCorrelationID + ":" + clientRequestId + ":" + fileSystemID + ":"
               + getPrimaryRequestIdForHeader(retryCount > 0) + ":" + streamID
-              + ":" + opType + ":" + retryCount;
+              + ":" + opType + ":" + retryCount + ":" + fallbackDFSAppend;
       header = addFailureReasons(header, previousFailure);
       break;
     case TWO_ID_FORMAT:
