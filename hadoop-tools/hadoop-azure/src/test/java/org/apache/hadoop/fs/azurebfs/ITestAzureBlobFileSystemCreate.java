@@ -46,6 +46,7 @@ import org.apache.hadoop.fs.azurebfs.services.AbfsRestOperation;
 import org.apache.hadoop.fs.azurebfs.services.ITestAbfsClient;
 import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
 import org.apache.hadoop.fs.azurebfs.utils.TracingHeaderValidator;
+import org.mockito.Mockito;
 
 import static java.net.HttpURLConnection.HTTP_CONFLICT;
 import static java.net.HttpURLConnection.HTTP_INTERNAL_ERROR;
@@ -54,6 +55,7 @@ import static java.net.HttpURLConnection.HTTP_OK;
 import static java.net.HttpURLConnection.HTTP_PRECON_FAILED;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -173,8 +175,7 @@ public class ITestAzureBlobFileSystemCreate extends
   @Test
   public void testTryWithResources() throws Throwable {
     final AzureBlobFileSystem fs = getFileSystem();
-    Path testFolderPath = path(TEST_FOLDER_PATH);
-    Path testPath = new Path(testFolderPath, TEST_CHILD_FILE);
+    Path testPath = new Path(TEST_FOLDER_PATH, TEST_CHILD_FILE);
     try (FSDataOutputStream out = fs.create(testPath)) {
       out.write('1');
       out.hsync();
@@ -183,7 +184,7 @@ public class ITestAzureBlobFileSystemCreate extends
       out.write('2');
       out.hsync();
       fail("Expected a failure");
-    } catch (FileNotFoundException fnfe) {
+    } catch (IOException fnfe) {
       //appendblob outputStream does not generate suppressed exception on close as it is
       //single threaded code
       if (!fs.getAbfsStore().isAppendBlobKey(fs.makeQualified(testPath).toString())) {
@@ -207,10 +208,9 @@ public class ITestAzureBlobFileSystemCreate extends
   @Test
   public void testFilterFSWriteAfterClose() throws Throwable {
     final AzureBlobFileSystem fs = getFileSystem();
-    Path testFolderPath = path(TEST_FOLDER_PATH);
-    Path testPath = new Path(testFolderPath, TEST_CHILD_FILE);
+    Path testPath = new Path(TEST_FOLDER_PATH, TEST_CHILD_FILE);
     FSDataOutputStream out = fs.create(testPath);
-    intercept(FileNotFoundException.class,
+    intercept(IOException.class,
         () -> {
           try (FilterOutputStream fos = new FilterOutputStream(out)) {
             fos.write('a');
@@ -218,12 +218,12 @@ public class ITestAzureBlobFileSystemCreate extends
             out.hsync();
             fs.delete(testPath, false);
             // trigger the first failure
-            throw intercept(FileNotFoundException.class,
+            throw intercept(IOException.class,
                 () -> {
-              fos.write('b');
-              out.hsync();
-              return "hsync didn't raise an IOE";
-            });
+                  fos.write('b');
+                  out.hsync();
+                  return "hsync didn't raise an IOE";
+                });
           }
         });
   }
@@ -356,8 +356,8 @@ public class ITestAzureBlobFileSystemCreate extends
         Boolean.toString(true));
 
     final AzureBlobFileSystem fs =
-        (AzureBlobFileSystem) FileSystem.newInstance(currentFs.getUri(),
-            config);
+        Mockito.spy((AzureBlobFileSystem) FileSystem.newInstance(currentFs.getUri(),
+            config));
 
     // Get mock AbfsClient with current config
     AbfsClient
@@ -366,7 +366,8 @@ public class ITestAzureBlobFileSystemCreate extends
         fs.getAbfsStore().getClient(),
         fs.getAbfsStore().getAbfsConfiguration());
 
-    AzureBlobFileSystemStore abfsStore = fs.getAbfsStore();
+    AzureBlobFileSystemStore abfsStore = Mockito.spy(fs.getAbfsStore());
+    Mockito.doReturn(abfsStore).when(fs).getAbfsStore();
     abfsStore = setAzureBlobSystemStoreField(abfsStore, "client", mockClient);
     boolean isNamespaceEnabled = abfsStore
         .getIsNamespaceEnabled(getTestTracingContext(fs, false));
@@ -375,6 +376,7 @@ public class ITestAzureBlobFileSystemCreate extends
         AbfsRestOperation.class);
     AbfsHttpOperation http200Op = mock(
         AbfsHttpOperation.class);
+    AzureBlobFileSystemStore.VersionedFileStatus fileStatus = mock(AzureBlobFileSystemStore.VersionedFileStatus.class);
     when(http200Op.getStatusCode()).thenReturn(HTTP_OK);
     when(successOp.getResult()).thenReturn(http200Op);
 
@@ -402,12 +404,34 @@ public class ITestAzureBlobFileSystemCreate extends
             isNamespaceEnabled ? any(String.class) : eq(null),
             any(boolean.class), eq(null), any(TracingContext.class));
 
-    doThrow(fileNotFoundResponseEx) // Scn1: GFS fails with Http404
-        .doThrow(serverErrorResponseEx) // Scn2: GFS fails with Http500
-        .doReturn(successOp) // Scn3: create overwrite=true fails with Http412
-        .doReturn(successOp) // Scn4: create overwrite=true fails with Http500
+    // mock for overwrite=false
+    doThrow(conflictResponseEx) // Scn1: GFS fails with Http404
+        .doThrow(conflictResponseEx) // Scn2: GFS fails with Http500
+        .doThrow(
+            conflictResponseEx) // Scn3: create overwrite=true fails with Http412
+        .doThrow(
+            conflictResponseEx) // Scn4: create overwrite=true fails with Http500
+        .doThrow(
+            serverErrorResponseEx) // Scn5: create overwrite=false fails with Http500
         .when(mockClient)
-        .getPathStatus(any(String.class), eq(false), any(TracingContext.class));
+        .createPathBlob(any(String.class), eq(false),
+            any(), any(TracingContext.class));
+
+    doThrow(fileNotFoundResponseEx) // Scn1: GFS fails with Http404
+            .doThrow(serverErrorResponseEx) // Scn2: GFS fails with Http500
+            .doReturn(fileStatus)
+            .doReturn(fileStatus)
+            .when(abfsStore)
+            .getFileStatus(any(Path.class), any(TracingContext.class));
+
+    // mock for overwrite=true
+    doThrow(
+        preConditionResponseEx) // Scn3: create overwrite=true fails with Http412
+        .doThrow(
+            serverErrorResponseEx) // Scn4: create overwrite=true fails with Http500
+        .when(mockClient)
+        .createPathBlob(any(String.class), eq(true),
+            any(), any(TracingContext.class));
 
     // mock for overwrite=true
     doThrow(

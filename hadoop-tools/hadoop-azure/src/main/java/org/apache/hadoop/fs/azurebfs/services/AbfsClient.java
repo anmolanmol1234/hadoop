@@ -850,7 +850,10 @@ public class AbfsClient implements Closeable {
     abfsUriQueryBuilder.addQuery(QUERY_PARAM_CONTINUATION, continuation);
     appendSASTokenToQuery(destination, SASTokenProvider.RENAME_DESTINATION_OPERATION, abfsUriQueryBuilder);
 
-    final URL url = createRequestUrl(destination, abfsUriQueryBuilder.toString());
+    URL url = createRequestUrl(destination, abfsUriQueryBuilder.toString());
+    if (url.toString().contains(WASB_DNS_PREFIX)) {
+      url = changePrefixFromBlobtoDfs(url);
+    }
     final AbfsRestOperation op = createRenameRestOperation(url, requestHeaders);
     try {
       incrementAbfsRenamePath();
@@ -1460,7 +1463,10 @@ public class AbfsClient implements Closeable {
     String operation = recursive ? SASTokenProvider.DELETE_RECURSIVE_OPERATION : SASTokenProvider.DELETE_OPERATION;
     appendSASTokenToQuery(path, operation, abfsUriQueryBuilder);
 
-    final URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
+    URL url = createRequestUrl(path, abfsUriQueryBuilder.toString());
+    if (url.toString().contains(WASB_DNS_PREFIX)) {
+      url = changePrefixFromBlobtoDfs(url);
+    }
     final AbfsRestOperation op = new AbfsRestOperation(
             AbfsRestOperationType.DeletePath,
             this,
@@ -1486,6 +1492,65 @@ public class AbfsClient implements Closeable {
     }
 
     return op;
+  }
+
+  /**
+   * Call server API <a href="https://learn.microsoft.com/en-us/rest/api/storageservices/list-blobs">BlobList</a>.
+   *
+   * @param marker optional value. To be sent in case this method call in a non-first
+   * iteration to the blobList API. Value has to be equal to the field NextMarker in the response
+   * of previous iteration for the same operation.
+   * @param prefix optional value. Filters the results to return only blobs
+   * with names that begin with the specified prefix
+   * @param delimiter Optional. When the request includes this parameter,
+   * the operation returns a BlobPrefix element in the response body.
+   * This element acts as a placeholder for all blobs with names that begin
+   * with the same substring, up to the appearance of the delimiter character.
+   * @param maxResult define how many blobs can client handle in server response.
+   * In case maxResult <= 5000, server sends number of blobs equal to the value. In
+   * case maxResult > 5000, server sends maximum 5000 blobs.
+   * @param tracingContext object of {@link TracingContext}
+   *
+   * @return abfsRestOperation which contain list of {@link BlobProperty}
+   * via {@link AbfsRestOperation#getResult()}.{@link AbfsHttpOperation#getBlobList()}
+   *
+   * @throws AzureBlobFileSystemException thrown from server-call / xml-parsing
+   */
+  public AbfsRestOperation getListBlobs(String marker,
+                                        String prefix,
+                                        String delimiter,
+                                        Integer maxResult,
+                                        TracingContext tracingContext)
+          throws AzureBlobFileSystemException {
+    AbfsUriQueryBuilder abfsUriQueryBuilder = createDefaultUriQueryBuilder();
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_RESTYPE, CONTAINER);
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_COMP, QUERY_PARAM_COMP_VALUE_LIST);
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_DELIMITER, delimiter);
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_INCLUDE,
+            QUERY_PARAM_INCLUDE_VALUE_METADATA);
+    prefix = getDirectoryQueryParameter(prefix);
+    abfsUriQueryBuilder.addQuery(QUERY_PARAM_PREFIX, prefix);
+    if (marker != null) {
+      abfsUriQueryBuilder.addQuery(QUERY_PARAM_MARKER, marker);
+    }
+    if (maxResult != null) {
+      abfsUriQueryBuilder.addQuery(QUERY_PARAM_MAXRESULT, maxResult.toString());
+    }
+    appendSASTokenToQuery(null, SASTokenProvider.LIST_BLOB_OPERATION,
+            abfsUriQueryBuilder);
+    final URL url = createBlobRequestUrl(abfsUriQueryBuilder);
+    final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
+    final AbfsRestOperation op = getListBlobOperation(url, requestHeaders);
+
+    op.execute(tracingContext);
+    return op;
+  }
+
+  @VisibleForTesting
+  AbfsRestOperation getListBlobOperation(final URL url,
+                                         final List<AbfsHttpHeader> requestHeaders) {
+    return getAbfsRestOperation(AbfsRestOperationType.GetListBlobProperties, HTTP_METHOD_GET,
+            url, requestHeaders);
   }
 
   /**
