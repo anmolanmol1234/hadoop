@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 
+import org.apache.hadoop.fs.azurebfs.services.PrefixMode;
 import org.junit.After;
 import org.junit.Before;
 import org.slf4j.Logger;
@@ -256,6 +257,15 @@ public abstract class AbstractAbfsIntegrationTest extends
   public AccessTokenProvider getAccessTokenProvider(final AzureBlobFileSystem fs) {
     return ITestAbfsClient.getAccessTokenProvider(fs.getAbfsStore().getClient());
   }
+
+  public AbfsClient getClient(final AzureBlobFileSystem fs) {
+    return fs.getAbfsStore().getClient();
+  }
+
+  public PrefixMode getPrefixMode(final AzureBlobFileSystem fs) {
+    return fs.getAbfsStore().getAbfsConfiguration().getPrefixMode();
+  }
+
 
   public void loadConfiguredFileSystem() throws Exception {
       // disable auto-creation of filesystem

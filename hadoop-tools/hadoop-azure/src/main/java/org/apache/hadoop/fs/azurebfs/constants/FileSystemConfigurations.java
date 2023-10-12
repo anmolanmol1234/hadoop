@@ -132,11 +132,13 @@ public final class FileSystemConfigurations {
    */
   public static final String DATA_BLOCKS_BUFFER_DISK = "disk";
 
+  public static final String DATA_BLOCKS_BYTEBUFFER = "bytebuffer";
+
   /**
    * Default buffer option: {@value}.
    */
   public static final String DATA_BLOCKS_BUFFER_DEFAULT =
-      DATA_BLOCKS_BUFFER_DISK;
+          DATA_BLOCKS_BYTEBUFFER;
 
   /** The blockId of each block should be of the same length. */
   public static final int BLOCK_ID_LENGTH = 60;

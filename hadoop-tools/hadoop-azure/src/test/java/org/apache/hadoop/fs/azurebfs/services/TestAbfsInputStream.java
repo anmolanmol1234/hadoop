@@ -245,11 +245,13 @@ public class TestAbfsInputStream extends
 
     // verify GetPathStatus invoked when FileStatus not provided
     abfsStore.openFileForRead(testFile,
-        Optional.empty(), null,
-        tracingContext);
-    verify(mockClient, times(1).description(
-        "GetPathStatus should be invoked when FileStatus not provided"))
-        .getPathStatus(anyString(), anyBoolean(), any(TracingContext.class));
+            Optional.empty(), null,
+            tracingContext);
+    if (getPrefixMode(getFileSystem()) == PrefixMode.DFS) {
+      verify(mockClient, times(1).description(
+              "GetPathStatus should be invoked when FileStatus not provided"))
+              .getPathStatus(anyString(), anyBoolean(), any(TracingContext.class));
+    }
 
     Mockito.reset(mockClient); //clears invocation count for next test case
   }
@@ -270,41 +272,41 @@ public class TestAbfsInputStream extends
     writeBufferToNewFile(largeTestFile, largeBuffer);
 
     FileStatus[] getFileStatusResults = {fs.getFileStatus(smallTestFile),
-        fs.getFileStatus(largeTestFile)};
+            fs.getFileStatus(largeTestFile)};
     FileStatus[] listStatusResults = fs.listStatus(new Path(testFolder));
 
     // open with fileStatus from GetPathStatus
     verifyOpenWithProvidedStatus(smallTestFile, getFileStatusResults[0],
-        smallBuffer, AbfsRestOperationType.GetPathStatus);
+            smallBuffer, AbfsRestOperationType.GetPathStatus);
     verifyOpenWithProvidedStatus(largeTestFile, getFileStatusResults[1],
-        largeBuffer, AbfsRestOperationType.GetPathStatus);
+            largeBuffer, AbfsRestOperationType.GetPathStatus);
 
     // open with fileStatus from ListStatus
     verifyOpenWithProvidedStatus(smallTestFile, listStatusResults[0], smallBuffer,
-        AbfsRestOperationType.ListPaths);
+            AbfsRestOperationType.ListPaths);
     verifyOpenWithProvidedStatus(largeTestFile, listStatusResults[1], largeBuffer,
-        AbfsRestOperationType.ListPaths);
+            AbfsRestOperationType.ListPaths);
 
     // verify number of GetPathStatus invocations
     AzureBlobFileSystemStore abfsStore = getAbfsStore(fs);
-    AbfsClient mockClient = spy(getAbfsClient(abfsStore));
+    AbfsClient mockClient = spy(getClient(fs));
     setAbfsClient(abfsStore, mockClient);
     TracingContext tracingContext = getTestTracingContext(fs, false);
     checkGetPathStatusCalls(smallTestFile, getFileStatusResults[0],
-        abfsStore, mockClient, AbfsRestOperationType.GetPathStatus, tracingContext);
+            abfsStore, mockClient, AbfsRestOperationType.GetPathStatus, tracingContext);
     checkGetPathStatusCalls(largeTestFile, getFileStatusResults[1],
-        abfsStore, mockClient, AbfsRestOperationType.GetPathStatus, tracingContext);
+            abfsStore, mockClient, AbfsRestOperationType.GetPathStatus, tracingContext);
     checkGetPathStatusCalls(smallTestFile, listStatusResults[0],
-        abfsStore, mockClient, AbfsRestOperationType.ListPaths, tracingContext);
+            abfsStore, mockClient, AbfsRestOperationType.ListPaths, tracingContext);
     checkGetPathStatusCalls(largeTestFile, listStatusResults[1],
-        abfsStore, mockClient, AbfsRestOperationType.ListPaths, tracingContext);
+            abfsStore, mockClient, AbfsRestOperationType.ListPaths, tracingContext);
 
     // Verify with incorrect filestatus
     getFileStatusResults[0].setPath(new Path("wrongPath"));
     intercept(ExecutionException.class,
-        () -> verifyOpenWithProvidedStatus(smallTestFile,
-            getFileStatusResults[0], smallBuffer,
-            AbfsRestOperationType.GetPathStatus));
+            () -> verifyOpenWithProvidedStatus(smallTestFile,
+                    getFileStatusResults[0], smallBuffer,
+                    AbfsRestOperationType.GetPathStatus));
   }
 
   /**

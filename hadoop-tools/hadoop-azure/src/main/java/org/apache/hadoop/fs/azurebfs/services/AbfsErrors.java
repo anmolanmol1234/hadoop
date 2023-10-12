@@ -49,6 +49,6 @@ public final class AbfsErrors {
   public static final String ERR_NO_LEASE_THREADS = "Lease desired but no lease threads "
       + "configured, set " + FS_AZURE_LEASE_THREADS;
   public static final String BLOB_OPERATION_NOT_SUPPORTED = "Blob operation is not supported.";
-
+  public static final String ERR_CREATE_ON_ROOT = "Cannot create file over root path";
   private AbfsErrors() {}
 }
