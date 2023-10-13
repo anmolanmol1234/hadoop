@@ -73,6 +73,7 @@ public class BlobListXmlParser extends DefaultHandler {
      * 2. BlobPrefix: for directories both explicit and implicit
      * <BlobPrefix>
      *   <Name>blob-prefix</Name>
+     *   <Properties> </Properties>
      * </BlobPrefix>
      */
     private BlobProperty currentBlobProperty;

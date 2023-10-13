@@ -450,7 +450,7 @@ public class AzureBlobFileSystem extends FileSystem
       TracingContext tracingContext = new TracingContext(clientCorrelationId,
           fileSystemId, FSOperationType.APPEND, tracingHeaderFormat,
           listener);
-      OutputStream outputStream = abfsStore
+      OutputStream outputStream = getAbfsStore()
           .openFileForWrite(qualifiedPath, statistics, false, tracingContext);
       return new FSDataOutputStream(outputStream, statistics);
     } catch (AzureBlobFileSystemException ex) {
@@ -993,7 +993,7 @@ public class AzureBlobFileSystem extends FileSystem
    */
   @Override
   public void setXAttr(final Path path, final String name, final byte[] value, final EnumSet<XAttrSetFlag> flag)
-          throws IOException {
+      throws IOException {
     LOG.debug("AzureBlobFileSystem.setXAttr path: {}", path);
 
     if (name == null || name.isEmpty() || value == null) {
@@ -1004,8 +1004,8 @@ public class AzureBlobFileSystem extends FileSystem
 
     try {
       TracingContext tracingContext = new TracingContext(clientCorrelationId,
-              fileSystemId, FSOperationType.SET_ATTR, true, tracingHeaderFormat,
-              listener);
+          fileSystemId, FSOperationType.SET_ATTR, true, tracingHeaderFormat,
+          listener);
       Hashtable<String, String> properties;
       String xAttrName = ensureValidAttributeName(name);
       String xAttrValue;
@@ -1045,7 +1045,6 @@ public class AzureBlobFileSystem extends FileSystem
     }
   }
 
-
   /**
    * Get the value of an attribute for a path.
    *
@@ -1058,7 +1057,7 @@ public class AzureBlobFileSystem extends FileSystem
    */
   @Override
   public byte[] getXAttr(final Path path, final String name)
-          throws IOException {
+      throws IOException {
     LOG.debug("AzureBlobFileSystem.getXAttr path: {}", path);
 
     if (name == null || name.isEmpty()) {
@@ -1070,8 +1069,8 @@ public class AzureBlobFileSystem extends FileSystem
     byte[] value = null;
     try {
       TracingContext tracingContext = new TracingContext(clientCorrelationId,
-              fileSystemId, FSOperationType.GET_ATTR, true, tracingHeaderFormat,
-              listener);
+          fileSystemId, FSOperationType.GET_ATTR, true, tracingHeaderFormat,
+          listener);
       Hashtable<String, String> properties;
       String xAttrName = ensureValidAttributeName(name);
 
@@ -1085,7 +1084,7 @@ public class AzureBlobFileSystem extends FileSystem
         if (properties.containsKey(xAttrName)) {
           String xAttrValue = properties.get(xAttrName);
           value = decodeMetadataAttribute(xAttrValue).getBytes(
-                  StandardCharsets.UTF_8);
+              StandardCharsets.UTF_8);
         }
         return value;
       }
@@ -1159,7 +1158,7 @@ public class AzureBlobFileSystem extends FileSystem
     if (!getIsNamespaceEnabled(tracingContext)) {
       throw new UnsupportedOperationException(
           "modifyAclEntries is only supported by storage accounts with the "
-              + "hierarchical namespace enabled.");
+          + "hierarchical namespace enabled.");
     }
 
     if (aclSpec == null || aclSpec.isEmpty()) {
@@ -1194,7 +1193,7 @@ public class AzureBlobFileSystem extends FileSystem
     if (!getIsNamespaceEnabled(tracingContext)) {
       throw new UnsupportedOperationException(
           "removeAclEntries is only supported by storage accounts with the "
-              + "hierarchical namespace enabled.");
+          + "hierarchical namespace enabled.");
     }
 
     if (aclSpec == null || aclSpec.isEmpty()) {
@@ -1226,7 +1225,7 @@ public class AzureBlobFileSystem extends FileSystem
     if (!getIsNamespaceEnabled(tracingContext)) {
       throw new UnsupportedOperationException(
           "removeDefaultAcl is only supported by storage accounts with the "
-              + "hierarchical namespace enabled.");
+          + "hierarchical namespace enabled.");
     }
 
     Path qualifiedPath = makeQualified(path);
@@ -1256,7 +1255,7 @@ public class AzureBlobFileSystem extends FileSystem
     if (!getIsNamespaceEnabled(tracingContext)) {
       throw new UnsupportedOperationException(
           "removeAcl is only supported by storage accounts with the "
-              + "hierarchical namespace enabled.");
+          + "hierarchical namespace enabled.");
     }
 
     Path qualifiedPath = makeQualified(path);
@@ -1289,7 +1288,7 @@ public class AzureBlobFileSystem extends FileSystem
     if (!getIsNamespaceEnabled(tracingContext)) {
       throw new UnsupportedOperationException(
           "setAcl is only supported by storage accounts with the hierarchical "
-              + "namespace enabled.");
+          + "namespace enabled.");
     }
 
     if (aclSpec == null || aclSpec.size() == 0) {
@@ -1321,7 +1320,7 @@ public class AzureBlobFileSystem extends FileSystem
     if (!getIsNamespaceEnabled(tracingContext)) {
       throw new UnsupportedOperationException(
           "getAclStatus is only supported by storage account with the "
-              + "hierarchical namespace enabled.");
+          + "hierarchical namespace enabled.");
     }
 
     Path qualifiedPath = makeQualified(path);
@@ -1572,7 +1571,7 @@ public class AzureBlobFileSystem extends FileSystem
       case HttpURLConnection.HTTP_NOT_FOUND:
         throw (IOException) new FileNotFoundException(message)
             .initCause(exception);
-      case HTTP_CONFLICT:
+      case HttpURLConnection.HTTP_CONFLICT:
         throw (IOException) new FileAlreadyExistsException(message)
             .initCause(exception);
       case HttpURLConnection.HTTP_FORBIDDEN:
@@ -1723,7 +1722,6 @@ public class AzureBlobFileSystem extends FileSystem
     case CommonPathCapabilities.FS_APPEND:
     case CommonPathCapabilities.ETAGS_AVAILABLE:
       return true;
-
     case CommonPathCapabilities.ETAGS_PRESERVED_IN_RENAME:
     case CommonPathCapabilities.FS_ACLS:
       return getIsNamespaceEnabled(
@@ -1749,4 +1747,5 @@ public class AzureBlobFileSystem extends FileSystem
   public IOStatistics getIOStatistics() {
     return abfsCounters != null ? abfsCounters.getIOStatistics() : null;
   }
+
 }

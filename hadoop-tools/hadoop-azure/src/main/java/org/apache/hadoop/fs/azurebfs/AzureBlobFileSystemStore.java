@@ -2205,7 +2205,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
      * The etag of an object.
      * Not-final so that serialization via reflection will preserve the value.
      */
-    private String version;
+    private final String version;
 
     private VersionedFileStatus(
             final String owner, final String group, final FsPermission fsPermission, final boolean hasAcl,
