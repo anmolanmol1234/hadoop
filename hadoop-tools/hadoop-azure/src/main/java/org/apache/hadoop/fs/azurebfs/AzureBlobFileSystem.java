@@ -362,13 +362,22 @@ public class AzureBlobFileSystem extends FileSystem
           ERR_CREATE_ON_ROOT,
           null);
     }
-
     Path qualifiedPath = makeQualified(f);
+    TracingContext tracingContext = new TracingContext(clientCorrelationId,
+            fileSystemId, FSOperationType.CREATE, overwrite, tracingHeaderFormat, listener);
+    FileStatus fileStatus = tryGetFileStatus(qualifiedPath, tracingContext);
+    // This fix is needed for create idempotency, should throw error if overwrite is false and file status is not null.
+    boolean fileOverwrite = overwrite;
+    if (!fileOverwrite) {
+      if (fileStatus != null) {
+        // path references a file and overwrite is disabled
+        throw new FileAlreadyExistsException(f + " already exists");
+      }
+      fileOverwrite = true;
+    }
 
     try {
-      TracingContext tracingContext = new TracingContext(clientCorrelationId,
-          fileSystemId, FSOperationType.CREATE, overwrite, tracingHeaderFormat, listener);
-      OutputStream outputStream = getAbfsStore().createFile(qualifiedPath, statistics, overwrite,
+      OutputStream outputStream = getAbfsStore().createFile(qualifiedPath, statistics, fileOverwrite,
           permission == null ? FsPermission.getFileDefault() : permission,
           FsPermission.getUMask(getConf()), tracingContext);
       statIncrement(FILES_CREATED);
