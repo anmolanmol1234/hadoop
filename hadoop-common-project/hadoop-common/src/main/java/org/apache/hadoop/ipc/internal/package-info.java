@@ -16,29 +16,13 @@
  * limitations under the License.
  */
 
-package org.apache.hadoop.fs.s3a;
-
-import software.amazon.awssdk.awscore.exception.AwsServiceException;
-
-import static org.apache.hadoop.fs.s3a.impl.InternalConstants.SC_400_BAD_REQUEST;
-
 /**
- * A 400 "Bad Request" exception was received.
- * This is the general "bad parameters, headers, whatever" failure.
+ * IPC internal classes not for any use by libraries outside
+ * the apache hadoop source tree.
  */
-public class AWSBadRequestException extends AWSServiceIOException {
-  /**
-   * HTTP status code which signals this failure mode was triggered: {@value}.
-   */
-  public static final int STATUS_CODE = SC_400_BAD_REQUEST;
+@InterfaceAudience.LimitedPrivate({"HDFS", "MapReduce", "YARN"})
+@InterfaceStability.Unstable
+package org.apache.hadoop.ipc.internal;
 
-  /**
-   * Instantiate.
-   * @param operation operation which triggered this
-   * @param cause the underlying cause
-   */
-  public AWSBadRequestException(String operation,
-      AwsServiceException cause) {
-    super(operation, cause);
-  }
-}
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceStability;
