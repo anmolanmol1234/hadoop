@@ -1131,7 +1131,14 @@
   not permitted to connect to the namenode.  The full pathname of the
   file must be specified.  If the value is empty, no hosts are
   excluded.</description>
-</property> 
+</property>
+
+<property>
+  <name>dfs.hosts.timeout</name>
+  <value>0</value>
+  <description>Specifies a timeout (in milliseconds) for reading the dfs.hosts file.
+  A value of zero indicates no timeout to be set.</description>
+</property>
 
 <property>
   <name>dfs.namenode.max.objects</name>
@@ -3608,6 +3615,14 @@
 </property>
 
 <property>
+  <name>dfs.namenode.edekcacheloader.max-retries</name>
+  <value>10</value>
+  <description>When KeyProvider is configured, the max retries allowed to attempt
+    warm up edek cache if none of key successful on NN start up / become active.
+  </description>
+</property>
+
+<property>
   <name>dfs.namenode.reencrypt.sleep.interval</name>
   <value>1m</value>
   <description>Interval the re-encrypt EDEK thread sleeps in the main loop. The
@@ -5044,6 +5059,16 @@
     Time interval, in milliseconds, between two Journal Node syncs.
     This configuration takes effect only if the journalnode sync is enabled
     by setting the configuration parameter dfs.journalnode.enable.sync to true.
+  </description>
+</property>
+
+<property>
+  <name>dfs.journalnode.enable.sync.format</name>
+  <value>false</value>
+  <description>
+    If true, the journal node syncer daemon that tries to sync edit
+    logs between journal nodes will try to format its journal if it is not.
+    It will query the other journal nodes for the storage info required to format.
   </description>
 </property>
 

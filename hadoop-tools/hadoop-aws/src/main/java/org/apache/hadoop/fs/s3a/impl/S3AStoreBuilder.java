@@ -18,8 +18,7 @@
 
 package org.apache.hadoop.fs.s3a.impl;
 
-import software.amazon.awssdk.services.s3.S3Client;
-
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.s3a.S3AInstrumentation;
 import org.apache.hadoop.fs.s3a.S3AStorageStatistics;
 import org.apache.hadoop.fs.s3a.S3AStore;
@@ -36,7 +35,7 @@ public class S3AStoreBuilder {
 
   private StoreContextFactory storeContextFactory;
 
-  private S3Client s3Client;
+  private ClientManager clientManager;
 
   private DurationTrackerFactory durationTrackerFactory;
 
@@ -52,15 +51,22 @@ public class S3AStoreBuilder {
 
   private AuditSpanSource<AuditSpanS3A> auditSpanSource;
 
+  /**
+   * The original file system statistics: fairly minimal but broadly
+   * collected so it is important to pick up.
+   * This may be null.
+   */
+  private FileSystem.Statistics fsStatistics;
+
   public S3AStoreBuilder withStoreContextFactory(
           final StoreContextFactory storeContextFactoryValue) {
     this.storeContextFactory = storeContextFactoryValue;
     return this;
   }
 
-  public S3AStoreBuilder withS3Client(
-          final S3Client s3ClientValue) {
-    this.s3Client = s3ClientValue;
+  public S3AStoreBuilder withClientManager(
+          final ClientManager manager) {
+    this.clientManager = manager;
     return this;
   }
 
@@ -106,8 +112,21 @@ public class S3AStoreBuilder {
     return this;
   }
 
+  public S3AStoreBuilder withFsStatistics(final FileSystem.Statistics value) {
+    this.fsStatistics = value;
+    return this;
+  }
+
   public S3AStore build() {
-    return new S3AStoreImpl(storeContextFactory, s3Client, durationTrackerFactory, instrumentation,
-        statisticsContext, storageStatistics, readRateLimiter, writeRateLimiter, auditSpanSource);
+    return new S3AStoreImpl(storeContextFactory,
+        clientManager,
+        durationTrackerFactory,
+        instrumentation,
+        statisticsContext,
+        storageStatistics,
+        readRateLimiter,
+        writeRateLimiter,
+        auditSpanSource,
+        fsStatistics);
   }
 }

@@ -24,6 +24,7 @@ import java.util.Map;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.audit.AuditStatisticNames;
 import org.apache.hadoop.fs.s3a.statistics.StatisticTypeEnum;
+import org.apache.hadoop.fs.statistics.FileSystemStatisticNames;
 import org.apache.hadoop.fs.statistics.StoreStatisticNames;
 import org.apache.hadoop.fs.statistics.StreamStatisticNames;
 
@@ -64,7 +65,49 @@ public enum Statistic {
       "GET request.",
       TYPE_DURATION),
 
+  /* Http error responses */
+  HTTP_RESPONSE_400(
+      StoreStatisticNames.HTTP_RESPONSE_400,
+      "400 response.",
+      TYPE_COUNTER),
+
+  HTTP_RESPONSE_429(
+      StoreStatisticNames.HTTP_RESPONSE_429,
+      "429 response.",
+      TYPE_COUNTER),
+
+  HTTP_RESPONSE_4XX(
+      StoreStatisticNames.HTTP_RESPONSE_4XX,
+      "4XX response.",
+      TYPE_COUNTER),
+
+  HTTP_RESPONSE_500(
+      StoreStatisticNames.HTTP_RESPONSE_500,
+      "500 response.",
+      TYPE_COUNTER),
+
+  HTTP_RESPONSE_503(
+      StoreStatisticNames.HTTP_RESPONSE_503,
+      "503 response.",
+      TYPE_COUNTER),
+
+  HTTP_RESPONSE_5XX(
+      StoreStatisticNames.HTTP_RESPONSE_5XX,
+      "5XX response.",
+      TYPE_COUNTER),
+
+
   /* FileSystem Level statistics */
+
+  FILESYSTEM_INITIALIZATION(
+      FileSystemStatisticNames.FILESYSTEM_INITIALIZATION,
+      "Filesystem initialization",
+      TYPE_DURATION),
+  FILESYSTEM_CLOSE(
+      FileSystemStatisticNames.FILESYSTEM_CLOSE,
+      "Filesystem close",
+      TYPE_DURATION),
+
   DIRECTORIES_CREATED("directories_created",
       "Total number of directories created through the object store.",
       TYPE_COUNTER),
@@ -269,6 +312,10 @@ public enum Statistic {
       StoreStatisticNames.OBJECT_PUT_BYTES_PENDING,
       "number of bytes queued for upload/being actively uploaded",
       TYPE_GAUGE),
+  STREAM_LEAKS(
+      StreamStatisticNames.STREAM_LEAKS,
+      "Streams detected as not closed safely",
+      TYPE_COUNTER),
   STREAM_READ_ABORTED(
       StreamStatisticNames.STREAM_READ_ABORTED,
       "Count of times the TCP stream was aborted",
@@ -532,6 +579,11 @@ public enum Statistic {
       TYPE_DURATION),
 
   /* General Store operations */
+  STORE_CLIENT_CREATION(
+      StoreStatisticNames.STORE_CLIENT_CREATION,
+      "Store Client Creation",
+      TYPE_DURATION),
+
   STORE_EXISTS_PROBE(StoreStatisticNames.STORE_EXISTS_PROBE,
       "Store Existence Probe",
       TYPE_DURATION),

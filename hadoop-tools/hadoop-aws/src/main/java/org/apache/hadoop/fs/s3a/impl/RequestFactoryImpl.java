@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.fs.s3a.impl;
 
+import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -43,6 +44,7 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.MetadataDirective;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.SdkPartType;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 import software.amazon.awssdk.services.s3.model.StorageClass;
 import software.amazon.awssdk.services.s3.model.UploadPartRequest;
@@ -59,7 +61,9 @@ import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecretOperations;
 import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecrets;
 
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
+import static org.apache.hadoop.fs.s3a.Constants.DEFAULT_PART_UPLOAD_TIMEOUT;
 import static org.apache.hadoop.fs.s3a.S3AEncryptionMethods.UNKNOWN_ALGORITHM;
+import static org.apache.hadoop.fs.s3a.impl.AWSClientConfig.setRequestTimeout;
 import static org.apache.hadoop.fs.s3a.impl.InternalConstants.DEFAULT_UPLOAD_PART_COUNT_LIMIT;
 import static org.apache.hadoop.util.Preconditions.checkArgument;
 import static org.apache.hadoop.util.Preconditions.checkNotNull;
@@ -129,6 +133,12 @@ public class RequestFactoryImpl implements RequestFactory {
   private final boolean isMultipartUploadEnabled;
 
   /**
+   * Timeout for uploading objects/parts.
+   * This will be set on data put/post operations only.
+   */
+  private final Duration partUploadTimeout;
+
+  /**
    * Constructor.
    * @param builder builder with all the configuration.
    */
@@ -142,6 +152,7 @@ public class RequestFactoryImpl implements RequestFactory {
     this.contentEncoding = builder.contentEncoding;
     this.storageClass = builder.storageClass;
     this.isMultipartUploadEnabled = builder.isMultipartUploadEnabled;
+    this.partUploadTimeout = builder.partUploadTimeout;
   }
 
   /**
@@ -270,6 +281,8 @@ public class RequestFactoryImpl implements RequestFactory {
       LOG.debug("Propagating SSE-KMS settings from source {}",
           sourceKMSId);
       copyObjectRequestBuilder.ssekmsKeyId(sourceKMSId);
+      EncryptionSecretOperations.getSSEAwsKMSEncryptionContext(encryptionSecrets)
+          .ifPresent(copyObjectRequestBuilder::ssekmsEncryptionContext);
       return;
     }
 
@@ -282,11 +295,15 @@ public class RequestFactoryImpl implements RequestFactory {
       // Set the KMS key if present, else S3 uses AWS managed key.
       EncryptionSecretOperations.getSSEAwsKMSKey(encryptionSecrets)
           .ifPresent(copyObjectRequestBuilder::ssekmsKeyId);
+      EncryptionSecretOperations.getSSEAwsKMSEncryptionContext(encryptionSecrets)
+              .ifPresent(copyObjectRequestBuilder::ssekmsEncryptionContext);
       break;
     case DSSE_KMS:
       copyObjectRequestBuilder.serverSideEncryption(ServerSideEncryption.AWS_KMS_DSSE);
       EncryptionSecretOperations.getSSEAwsKMSKey(encryptionSecrets)
           .ifPresent(copyObjectRequestBuilder::ssekmsKeyId);
+      EncryptionSecretOperations.getSSEAwsKMSEncryptionContext(encryptionSecrets)
+              .ifPresent(copyObjectRequestBuilder::ssekmsEncryptionContext);
       break;
     case SSE_C:
       EncryptionSecretOperations.getSSECustomerKey(encryptionSecrets)
@@ -338,6 +355,11 @@ public class RequestFactoryImpl implements RequestFactory {
       putObjectRequestBuilder.storageClass(storageClass);
     }
 
+    // Set the timeout for object uploads but not directory markers.
+    if (!isDirectoryMarker) {
+      setRequestTimeout(putObjectRequestBuilder, partUploadTimeout);
+    }
+
     return prepareRequest(putObjectRequestBuilder);
   }
 
@@ -371,11 +393,15 @@ public class RequestFactoryImpl implements RequestFactory {
       // Set the KMS key if present, else S3 uses AWS managed key.
       EncryptionSecretOperations.getSSEAwsKMSKey(encryptionSecrets)
           .ifPresent(putObjectRequestBuilder::ssekmsKeyId);
+      EncryptionSecretOperations.getSSEAwsKMSEncryptionContext(encryptionSecrets)
+              .ifPresent(putObjectRequestBuilder::ssekmsEncryptionContext);
       break;
     case DSSE_KMS:
       putObjectRequestBuilder.serverSideEncryption(ServerSideEncryption.AWS_KMS_DSSE);
       EncryptionSecretOperations.getSSEAwsKMSKey(encryptionSecrets)
           .ifPresent(putObjectRequestBuilder::ssekmsKeyId);
+      EncryptionSecretOperations.getSSEAwsKMSEncryptionContext(encryptionSecrets)
+              .ifPresent(putObjectRequestBuilder::ssekmsEncryptionContext);
       break;
     case SSE_C:
       EncryptionSecretOperations.getSSECustomerKey(encryptionSecrets)
@@ -447,11 +473,15 @@ public class RequestFactoryImpl implements RequestFactory {
       // Set the KMS key if present, else S3 uses AWS managed key.
       EncryptionSecretOperations.getSSEAwsKMSKey(encryptionSecrets)
           .ifPresent(mpuRequestBuilder::ssekmsKeyId);
+      EncryptionSecretOperations.getSSEAwsKMSEncryptionContext(encryptionSecrets)
+              .ifPresent(mpuRequestBuilder::ssekmsEncryptionContext);
       break;
     case DSSE_KMS:
       mpuRequestBuilder.serverSideEncryption(ServerSideEncryption.AWS_KMS_DSSE);
       EncryptionSecretOperations.getSSEAwsKMSKey(encryptionSecrets)
           .ifPresent(mpuRequestBuilder::ssekmsKeyId);
+      EncryptionSecretOperations.getSSEAwsKMSEncryptionContext(encryptionSecrets)
+              .ifPresent(mpuRequestBuilder::ssekmsEncryptionContext);
       break;
     case SSE_C:
       EncryptionSecretOperations.getSSECustomerKey(encryptionSecrets)
@@ -559,6 +589,7 @@ public class RequestFactoryImpl implements RequestFactory {
       String destKey,
       String uploadId,
       int partNumber,
+      boolean isLastPart,
       long size) throws PathIOException {
     checkNotNull(uploadId);
     checkArgument(size >= 0, "Invalid partition size %s", size);
@@ -580,7 +611,13 @@ public class RequestFactoryImpl implements RequestFactory {
         .uploadId(uploadId)
         .partNumber(partNumber)
         .contentLength(size);
+    if (isLastPart) {
+      builder.sdkPartType(SdkPartType.LAST);
+    }
     uploadPartEncryptionParameters(builder);
+
+    // Set the request timeout for the part upload
+    setRequestTimeout(builder, partUploadTimeout);
     return prepareRequest(builder);
   }
 
@@ -688,6 +725,13 @@ public class RequestFactoryImpl implements RequestFactory {
      */
     private boolean isMultipartUploadEnabled = true;
 
+    /**
+     * Timeout for uploading objects/parts.
+     * This will be set on data put/post operations only.
+     * A zero value means "no custom timeout"
+     */
+    private Duration partUploadTimeout = DEFAULT_PART_UPLOAD_TIMEOUT;
+
     private RequestFactoryBuilder() {
     }
 
@@ -783,6 +827,18 @@ public class RequestFactoryImpl implements RequestFactory {
     public RequestFactoryBuilder withMultipartUploadEnabled(
         final boolean value) {
       this.isMultipartUploadEnabled = value;
+      return this;
+    }
+
+    /**
+     * Timeout for uploading objects/parts.
+     * This will be set on data put/post operations only.
+     * A zero value means "no custom timeout"
+     * @param value new value
+     * @return the builder
+     */
+    public RequestFactoryBuilder withPartUploadTimeout(final Duration value) {
+      partUploadTimeout = value;
       return this;
     }
   }

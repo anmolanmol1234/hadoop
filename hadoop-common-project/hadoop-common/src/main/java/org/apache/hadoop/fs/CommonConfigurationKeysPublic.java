@@ -736,6 +736,12 @@ public class CommonConfigurationKeysPublic {
    */
   public static final String  HADOOP_RPC_PROTECTION =
     "hadoop.rpc.protection";
+  public static final String HADOOP_SECURITY_SASL_MECHANISM_KEY
+      = "hadoop.security.sasl.mechanism";
+  public static final String HADOOP_SECURITY_SASL_MECHANISM_DEFAULT
+      = "DIGEST-MD5";
+  public static final String HADOOP_SECURITY_SASL_CUSTOMIZEDCALLBACKHANDLER_CLASS_KEY
+      = "hadoop.security.sasl.CustomizedCallbackHandler.class";
   /** Class to override Sasl Properties for a connection */
   public static final String  HADOOP_SECURITY_SASL_PROPS_RESOLVER_CLASS =
     "hadoop.security.saslproperties.resolver.class";
@@ -1022,6 +1028,7 @@ public class CommonConfigurationKeysPublic {
           "fs.s3a.*.server-side-encryption.key",
           "fs.s3a.encryption.algorithm",
           "fs.s3a.encryption.key",
+          "fs.s3a.encryption.context",
           "fs.azure\\.account.key.*",
           "credential$",
           "oauth.*secret",

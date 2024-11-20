@@ -733,6 +733,23 @@
 </property>
 
 <property>
+  <name>hadoop.security.sasl.mechanism</name>
+  <value>DIGEST-MD5</value>
+  <description>
+    The SASL mechanism used in Hadoop.
+  </description>
+</property>
+
+<property>
+  <name>hadoop.security.sasl.CustomizedCallbackHandler.class</name>
+  <value></value>
+  <description>
+    Some security provider may define a new javax.security.auth.callback.Callback.
+    This property allows users to configure a customized callback handler.
+  </description>
+</property>
+
+<property>
   <name>hadoop.security.sensitive-config-keys</name>
   <value>
       secret$
@@ -742,6 +759,7 @@
       fs.s3a.*.server-side-encryption.key
       fs.s3a.encryption.algorithm
       fs.s3a.encryption.key
+      fs.s3a.encryption.context
       fs.s3a.secret.key
       fs.s3a.*.secret.key
       fs.s3a.session.key
@@ -1757,6 +1775,15 @@
     S3 KMS key, otherwise you should set this property to the specific KMS key
     id. In case of 'CSE-KMS' this value needs to be the AWS-KMS Key ID
     generated from AWS console.
+  </description>
+</property>
+
+<property>
+  <name>fs.s3a.encryption.context</name>
+  <description>Specific encryption context to use if fs.s3a.encryption.algorithm
+    has been set to 'SSE-KMS' or 'DSSE-KMS'. The value of this property is a set
+    of non-secret comma-separated key-value pairs of additional contextual
+    information about the data that are separated by equal operator (=).
   </description>
 </property>
 

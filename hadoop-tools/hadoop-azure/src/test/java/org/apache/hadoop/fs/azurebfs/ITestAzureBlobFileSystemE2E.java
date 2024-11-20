@@ -35,10 +35,12 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys;
 
+import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_CREATE_REMOTE_FILESYSTEM_DURING_INITIALIZATION;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_HTTP_CONNECTION_TIMEOUT;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_HTTP_READ_TIMEOUT;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_MAX_IO_RETRIES;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_TOLERATE_CONCURRENT_APPEND;
+import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE_ACCOUNT_IS_HNS_ENABLED;
 import static org.apache.hadoop.fs.contract.ContractTestUtils.assertPathDoesNotExist;
 import static org.apache.hadoop.fs.contract.ContractTestUtils.assertPathExists;
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
@@ -257,22 +259,27 @@ public class ITestAzureBlobFileSystemE2E extends AbstractAbfsIntegrationTest {
   }
 
   public void testHttpTimeouts(int connectionTimeoutMs, int readTimeoutMs)
-          throws Exception {
+      throws Exception {
+    // This is to make sure File System creation goes through before network calls start failing.
+    assumeValidTestConfigPresent(this.getRawConfiguration(), FS_AZURE_ACCOUNT_IS_HNS_ENABLED);
+
     Configuration conf = this.getRawConfiguration();
     // set to small values that will cause timeouts
     conf.setInt(AZURE_HTTP_CONNECTION_TIMEOUT, connectionTimeoutMs);
     conf.setInt(AZURE_HTTP_READ_TIMEOUT, readTimeoutMs);
+    conf.setBoolean(AZURE_CREATE_REMOTE_FILESYSTEM_DURING_INITIALIZATION,
+        false);
     // Reduce retry count to reduce test run time
     conf.setInt(AZURE_MAX_IO_RETRIES, 1);
     final AzureBlobFileSystem fs = getFileSystem(conf);
     Assertions.assertThat(
-                    fs.getAbfsStore().getAbfsConfiguration().getHttpConnectionTimeout())
-            .describedAs("HTTP connection time should be picked from config")
-            .isEqualTo(connectionTimeoutMs);
+            fs.getAbfsStore().getAbfsConfiguration().getHttpConnectionTimeout())
+        .describedAs("HTTP connection time should be picked from config")
+        .isEqualTo(connectionTimeoutMs);
     Assertions.assertThat(
-                    fs.getAbfsStore().getAbfsConfiguration().getHttpReadTimeout())
-            .describedAs("HTTP Read time should be picked from config")
-            .isEqualTo(readTimeoutMs);
+            fs.getAbfsStore().getAbfsConfiguration().getHttpReadTimeout())
+        .describedAs("HTTP Read time should be picked from config")
+        .isEqualTo(readTimeoutMs);
     Path testPath = path(methodName.getMethodName());
     ContractTestUtils.createFile(fs, testPath, false, new byte[0]);
   }
