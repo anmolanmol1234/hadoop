@@ -16,20 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.hadoop.fs.azurebfs.utils;
+package org.apache.hadoop.fs.azurebfs.contracts.exceptions;
 
-import org.apache.hadoop.fs.azurebfs.constants.FSOperationType;
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceStability;
 
-/**
- * Interface for testing identifiers tracked via TracingContext
- * Implemented in TracingHeaderValidator
- */
-
-public interface Listener {
-  void callTracingHeaderValidator(String header, TracingHeaderFormat format);
-  void updatePrimaryRequestID(String primaryRequestID);
-  Listener getClone();
-  void setOperation(FSOperationType operation);
-  void updateIngressHandler(String ingressHandler);
-  void updatePosition(String position);
+@InterfaceAudience.Public
+@InterfaceStability.Evolving
+public final class InvalidIngressServiceException
+    extends AbfsRestOperationException {
+  public InvalidIngressServiceException(final int statusCode,
+      final String errorCode,
+      final String errorMessage,
+      final Exception innerException) {
+    super(statusCode, errorCode, errorMessage, innerException);
+  }
 }

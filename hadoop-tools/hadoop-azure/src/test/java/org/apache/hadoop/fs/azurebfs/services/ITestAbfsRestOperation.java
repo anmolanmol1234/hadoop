@@ -172,8 +172,7 @@ public class ITestAbfsRestOperation extends AbstractAbfsIntegrationTest {
     configuration.addResource(TEST_CONFIGURATION_FILE_NAME);
     AbfsClient abfsClient = fs.getAbfsStore().getClient();
 
-    AbfsConfiguration abfsConfiguration = new AbfsConfiguration(configuration,
-        configuration.get(FS_AZURE_ABFS_ACCOUNT_NAME));
+    AbfsConfiguration abfsConfiguration = fs.getAbfsStore().getAbfsConfiguration();
 
     // Update the configuration with reduced retry count and reduced backoff interval.
     AbfsConfiguration abfsConfig
@@ -262,6 +261,7 @@ public class ITestAbfsRestOperation extends AbstractAbfsIntegrationTest {
       // behaviour based on response code.
 
       Mockito.doReturn(responseCode).when(httpOperation).getStatusCode();
+      Mockito.doReturn(responseCode).when(httpOperation).getConnResponseCode();
       if (responseCode == HTTP_UNAVAILABLE) {
         Mockito.doReturn(EGRESS_OVER_ACCOUNT_LIMIT.getErrorMessage())
             .when(httpOperation)

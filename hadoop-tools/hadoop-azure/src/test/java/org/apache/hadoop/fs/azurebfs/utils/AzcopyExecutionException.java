@@ -18,18 +18,16 @@
 
 package org.apache.hadoop.fs.azurebfs.utils;
 
-import org.apache.hadoop.fs.azurebfs.constants.FSOperationType;
+import java.io.IOException;
 
-/**
- * Interface for testing identifiers tracked via TracingContext
- * Implemented in TracingHeaderValidator
- */
+public class AzcopyExecutionException extends IOException {
+  private static final String SUGGESTION = "Try deleting the following azcopy tool directory and rerun tests: ";
 
-public interface Listener {
-  void callTracingHeaderValidator(String header, TracingHeaderFormat format);
-  void updatePrimaryRequestID(String primaryRequestID);
-  Listener getClone();
-  void setOperation(FSOperationType operation);
-  void updateIngressHandler(String ingressHandler);
-  void updatePosition(String position);
+  public AzcopyExecutionException(String message, String azcopyPath) {
+    super(message + SUGGESTION + azcopyPath);
+  }
+
+  public AzcopyExecutionException(String message, String azcopyPath, Throwable cause) {
+    super(message + SUGGESTION + azcopyPath, cause);
+  }
 }

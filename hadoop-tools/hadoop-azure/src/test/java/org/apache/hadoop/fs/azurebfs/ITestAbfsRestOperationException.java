@@ -29,6 +29,9 @@ import org.apache.hadoop.fs.azurebfs.contracts.services.AzureServiceErrorCode;
 import org.apache.hadoop.fs.azurebfs.oauth2.RetryTestTokenProvider;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azurebfs.services.AbfsBlobClient;
+import org.apache.hadoop.fs.azurebfs.services.AbfsClient;
+import org.apache.hadoop.fs.azurebfs.services.AbfsDfsClient;
 
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_CREATE_REMOTE_FILESYSTEM_DURING_INITIALIZATION;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_CUSTOM_TOKEN_FETCH_RETRY_COUNT;
@@ -56,6 +59,7 @@ public class ITestAbfsRestOperationException extends AbstractAbfsIntegrationTest
     final AzureBlobFileSystem fs = getFileSystem();
     Path nonExistedFilePath1 = new Path("nonExistedPath1");
     Path nonExistedFilePath2 = new Path("nonExistedPath2");
+    AbfsClient client = fs.getAbfsStore().getClient();
     try {
       fs.getFileStatus(nonExistedFilePath1);
     } catch (Exception ex) {
@@ -64,12 +68,21 @@ public class ITestAbfsRestOperationException extends AbstractAbfsIntegrationTest
 
       // Expected Fields are: Message, StatusCode, Method, URL, ActivityId(rId)
       Assertions.assertThat(errorFields)
-          .describedAs("Number of Fields in exception message are not as expected")
+          .describedAs(
+              "Number of Fields in exception message are not as expected")
           .hasSize(5);
       // Check status message, status code, HTTP Request Type and URL.
-      Assertions.assertThat(errorFields[0].trim())
-          .describedAs("Error Message Field in exception message is wrong")
-          .isEqualTo("Operation failed: \"The specified path does not exist.\"");
+      if (client instanceof AbfsBlobClient) {
+        Assertions.assertThat(errorFields[0].trim())
+            .describedAs("Error Message Field in exception message is wrong")
+            .contains(
+                "Operation failed: \"The specified blob does not exist.\"");
+      } else {
+        Assertions.assertThat(errorFields[0].trim())
+            .describedAs("Error Message Field in exception message is wrong")
+            .isEqualTo(
+                "Operation failed: \"The specified path does not exist.\"");
+      }
       Assertions.assertThat(errorFields[1].trim())
           .describedAs("Status Code Field in exception message "
               + "should be \"404\"")
@@ -91,46 +104,85 @@ public class ITestAbfsRestOperationException extends AbstractAbfsIntegrationTest
     try {
       fs.listFiles(nonExistedFilePath2, false);
     } catch (Exception ex) {
-      // verify its format
       String errorMessage = ex.getLocalizedMessage();
       String[] errorFields = errorMessage.split(",");
-      // Expected Fields are: Message, StatusCode, Method, URL, ActivityId(rId), StorageErrorCode, StorageErrorMessage.
-      Assertions.assertThat(errorFields)
-          .describedAs("Number of Fields in exception message are not as expected")
-          .hasSize(7);
-      // Check status message, status code, HTTP Request Type and URL.
-      Assertions.assertThat(errorFields[0].trim())
-          .describedAs("Error Message Field in exception message is wrong")
-          .isEqualTo("Operation failed: \"The specified path does not exist.\"");
-      Assertions.assertThat(errorFields[1].trim())
-          .describedAs("Status Code Field in exception message"
-              + " should be \"404\"")
-          .isEqualTo("404");
-      Assertions.assertThat(errorFields[2].trim())
-          .describedAs("Http Rest Method Field in exception message"
-              + " should be \"GET\"")
-          .isEqualTo("GET");
-      Assertions.assertThat(errorFields[3].trim())
-          .describedAs("Url Field in exception message"
-              + " should start with \"http\"")
-          .startsWith("http");
-      Assertions.assertThat(errorFields[4].trim())
-          .describedAs("ActivityId Field in exception message"
-              + " should start with \"rId:\"")
-          .startsWith("rId:");
-      // Check storage error code and storage error message.
-      Assertions.assertThat(errorFields[5].trim())
-          .describedAs("StorageErrorCode Field in exception message"
-              + " should be \"PathNotFound\"")
-          .isEqualTo("PathNotFound");
-      Assertions.assertThat(errorFields[6].trim())
-          .describedAs("StorageErrorMessage Field in exception message"
-              + " should contain \"RequestId\"")
-          .contains("RequestId");
-      Assertions.assertThat(errorFields[6].trim())
-          .describedAs("StorageErrorMessage Field in exception message"
-              + " should contain \"Time\"")
-          .contains("Time");
+      if (client instanceof AbfsDfsClient) {
+        // verify its format
+        // Expected Fields are: Message, StatusCode, Method, URL, ActivityId(rId), StorageErrorCode, StorageErrorMessage.
+        Assertions.assertThat(errorFields)
+            .describedAs(
+                "Number of Fields in exception message are not as expected")
+            .hasSize(7);
+        Assertions.assertThat(errorFields[0].trim())
+            .describedAs("Error Message Field in exception message is wrong")
+            .isEqualTo(
+                "Operation failed: \"The specified path does not exist.\"");
+        Assertions.assertThat(errorFields[1].trim())
+            .describedAs("Status Code Field in exception message"
+                + " should be \"404\"")
+            .isEqualTo("404");
+        Assertions.assertThat(errorFields[2].trim())
+            .describedAs("Http Rest Method Field in exception message"
+                + " should be \"GET\"")
+            .isEqualTo("GET");
+        Assertions.assertThat(errorFields[3].trim())
+            .describedAs("Url Field in exception message"
+                + " should start with \"http\"")
+            .startsWith("http");
+        Assertions.assertThat(errorFields[4].trim())
+            .describedAs("ActivityId Field in exception message"
+                + " should start with \"rId:\"")
+            .startsWith("rId:");
+        // Check storage error code and storage error message.
+        Assertions.assertThat(errorFields[5].trim())
+            .describedAs("StorageErrorCode Field in exception message"
+                + " should be \"PathNotFound\"")
+            .isEqualTo("PathNotFound");
+        Assertions.assertThat(errorFields[6].trim())
+            .describedAs("StorageErrorMessage Field in exception message"
+                + " should contain \"RequestId\"")
+            .contains("RequestId");
+        Assertions.assertThat(errorFields[6].trim())
+            .describedAs("StorageErrorMessage Field in exception message"
+                + " should contain \"Time\"")
+            .contains("Time");
+      } else {
+        // Expected Fields are: Message, StatusCode, Method, URL, ActivityId(rId)
+        Assertions.assertThat(errorFields)
+            .describedAs(
+                "Number of Fields in exception message are not as expected")
+            .hasSize(5);
+        // Check status message, status code, HTTP Request Type and URL.
+        if (getAbfsStore(fs).getAbfsConfiguration().enableAbfsListIterator()) {
+          Assertions.assertThat(errorFields[0].trim())
+              .describedAs(
+                  "Error Message Field in exception message is wrong")
+              .contains(
+                  "Operation failed: \"The specified container does not exist.\"");
+        } else {
+          Assertions.assertThat(errorFields[0].trim())
+              .describedAs(
+                  "Error Message Field in exception message is wrong")
+              .contains(
+                  "Operation failed: \"The specified blob does not exist.\"");
+        }
+        Assertions.assertThat(errorFields[1].trim())
+            .describedAs("Status Code Field in exception message "
+                + "should be \"404\"")
+            .isEqualTo("404");
+        Assertions.assertThat(errorFields[2].trim())
+            .describedAs("Http Rest Method Field in exception message "
+                + "should be \"HEAD\"")
+            .isEqualTo("HEAD");
+        Assertions.assertThat(errorFields[3].trim())
+            .describedAs("Url Field in exception message"
+                + " should start with \"http\"")
+            .startsWith("http");
+        Assertions.assertThat(errorFields[4].trim())
+            .describedAs("ActivityId Field in exception message "
+                + "should start with \"rId:\"")
+            .startsWith("rId:");
+      }
     }
   }
 

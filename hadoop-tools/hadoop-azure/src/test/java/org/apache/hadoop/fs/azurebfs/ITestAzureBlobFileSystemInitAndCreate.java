@@ -76,7 +76,7 @@ public class ITestAzureBlobFileSystemInitAndCreate extends
     AzureBlobFileSystem fs = ((AzureBlobFileSystem) FileSystem.newInstance(
         getRawConfiguration()));
     AzureBlobFileSystemStore store = Mockito.spy(fs.getAbfsStore());
-    AbfsClient client = Mockito.spy(fs.getAbfsClient());
+    AbfsClient client = Mockito.spy(fs.getAbfsStore().getClient(AbfsServiceType.DFS));
     Mockito.doReturn(client).when(store).getClient(AbfsServiceType.DFS);
 
     Mockito.doThrow(TrileanConversionException.class)
@@ -111,17 +111,6 @@ public class ITestAzureBlobFileSystemInitAndCreate extends
 
     Mockito.verify(client, Mockito.times(0))
         .getAclStatus(Mockito.anyString(), any(TracingContext.class));
-  }
-
-  // TODO: [FnsOverBlob][HADOOP-19179] Remove this test case once Blob Endpoint Support is enabled.
-  @Test
-  public void testFileSystemInitFailsWithBlobEndpoitUrl() throws Exception {
-    Configuration configuration = getRawConfiguration();
-    String defaultUri = configuration.get(FS_DEFAULT_NAME_KEY);
-    String blobUri = defaultUri.replace(ABFS_DFS_DOMAIN_NAME, ABFS_BLOB_DOMAIN_NAME);
-    intercept(InvalidConfigurationValueException.class,
-        "Blob Endpoint Support not yet available", () ->
-            FileSystem.newInstance(new Path(blobUri).toUri(), configuration));
   }
 
   @Test
