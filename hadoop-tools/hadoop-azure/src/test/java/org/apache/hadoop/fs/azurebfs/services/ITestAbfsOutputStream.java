@@ -49,7 +49,6 @@ import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AbfsRestOperationExcep
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AzureBlobFileSystemException;
 import org.apache.hadoop.fs.azurebfs.contracts.services.AppendRequestParameters;
 import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
-import org.apache.hadoop.test.LambdaTestUtils;
 import org.apache.http.HttpResponse;
 
 import static java.net.HttpURLConnection.HTTP_CONFLICT;
@@ -214,7 +213,7 @@ public class ITestAbfsOutputStream extends AbstractAbfsIntegrationTest {
     Mockito.doReturn(spiedClient).when(os).getClient();
     fs.delete(path, true);
     os.write(1);
-    if(spiedClient instanceof AbfsDfsClient) {
+    if( spiedClient instanceof AbfsDfsClient) {
       intercept(FileNotFoundException.class, os::close);
     } else {
       IOException ex = intercept(IOException.class, os::close);
@@ -376,7 +375,8 @@ public class ITestAbfsOutputStream extends AbstractAbfsIntegrationTest {
         .append(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(),
             Mockito.any(TracingContext.class));
     Mockito.verify(blobClient, Mockito.times(0)).
-        flush(Mockito.any(byte[].class), Mockito.anyString(), Mockito.anyBoolean(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.any(),
+        flush(Mockito.any(byte[].class), Mockito.anyString(), Mockito.anyBoolean(),
+            Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.any(),
             Mockito.any(TracingContext.class));
   }
 

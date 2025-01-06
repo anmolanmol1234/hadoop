@@ -34,7 +34,7 @@ public abstract class AzureBlockManager {
       AbfsOutputStream.class);
 
   /** Factory for blocks. */
-  protected final DataBlocks.BlockFactory blockFactory;
+  private final DataBlocks.BlockFactory blockFactory;
 
   /** Current data block. Null means none currently active. */
   protected AbfsBlock activeBlock;
@@ -133,10 +133,10 @@ public abstract class AzureBlockManager {
    * Clears the active block.
    */
   void clearActiveBlock() {
-    if (activeBlock != null) {
-      LOG.debug("Clearing active block");
-    }
     synchronized (this) {
+      if (activeBlock != null) {
+        LOG.debug("Clearing active block");
+      }
       activeBlock = null;
     }
   }

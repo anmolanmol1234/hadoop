@@ -391,12 +391,21 @@ public class AbfsBlobClient extends AbfsClient {
   }
 
   /**
-   * Get Rest Operation for API <a href = https://learn.microsoft.com/en-us/rest/api/storageservices/put-blob></a>.
-   * Creates a file or directory(marker file) at specified path.
-   * @param path of the directory to be created.
-   * @param tracingContext
-   * @return executed rest operation containing response from server.
-   * @throws AzureBlobFileSystemException if rest operation fails.
+   * Get Rest Operation for API
+   * <a href="https://learn.microsoft.com/en-us/rest/api/storageservices/put-blob">Put Blob</a>.
+   * Creates a file or directory (marker file) at the specified path.
+   *
+   * @param path the path of the directory to be created.
+   * @param isFile whether the path is a file.
+   * @param overwrite whether to overwrite if the path already exists.
+   * @param permissions the permissions to set on the path.
+   * @param isAppendBlob whether the path is an append blob.
+   * @param eTag the eTag of the path.
+   * @param contextEncryptionAdapter the context encryption adapter.
+   * @param tracingContext the tracing context.
+   * @param isCreateCalledFromMarkers whether the create is called from markers.
+   * @return the executed rest operation containing the response from the server.
+   * @throws AzureBlobFileSystemException if the rest operation fails.
    */
   public AbfsRestOperation createPath(final String path,
       final boolean isFile,
@@ -801,13 +810,14 @@ public class AbfsBlobClient extends AbfsClient {
 
   /**
    * Appends a block to an append blob.
-   * API reference: <a href="https://learn.microsoft.com/en-us/rest/api/storageservices/append-block"></a>
+   * <a href="../../../../site/markdown/blobEndpoint.md#append-block">Append Block</a>.
    *
-   * @param path               the path of the append blob.
-   * @param data               the data to be appended.
-   * @param tracingContext     the tracing context.
-   * @return executed rest operation containing response from server.
-   * @throws AzureBlobFileSystemException if rest operation fails.
+   * @param path the path of the append blob.
+   * @param requestParameters the parameters for the append request.
+   * @param data the data to be appended.
+   * @param tracingContext the tracing context.
+   * @return the executed rest operation containing the response from the server.
+   * @throws AzureBlobFileSystemException if the rest operation fails.
    */
   public AbfsRestOperation appendBlock(final String path,
       AppendRequestParameters requestParameters,
@@ -869,8 +879,8 @@ public class AbfsBlobClient extends AbfsClient {
       final String leaseId,
       final ContextEncryptionAdapter contextEncryptionAdapter,
       final TracingContext tracingContext) throws AzureBlobFileSystemException {
-    return this.flush(null, path, isClose, cachedSasToken, leaseId, null, contextEncryptionAdapter,
-        tracingContext);
+    throw new UnsupportedOperationException(
+        "Flush without blockIds not supported on Blob Endpoint");
   }
 
   /**
@@ -980,7 +990,6 @@ public class AbfsBlobClient extends AbfsClient {
     final AbfsRestOperation op = getAbfsRestOperation(
         AbfsRestOperationType.SetPathProperties,
         HTTP_METHOD_PUT, url, requestHeaders);
-    op.execute(tracingContext);
     try {
       op.execute(tracingContext);
     } catch (AbfsRestOperationException ex) {

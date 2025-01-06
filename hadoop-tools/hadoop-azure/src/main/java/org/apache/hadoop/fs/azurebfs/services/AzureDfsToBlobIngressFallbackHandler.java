@@ -49,12 +49,13 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
   private final Lock lock = new ReentrantLock();
 
   /**
-   * Constructs an AzureBlobIngressFallbackHandler.
+   * Constructs an AzureDfsToBlobIngressFallbackHandler.
    *
    * @param abfsOutputStream the AbfsOutputStream.
-   * @param blockFactory     the block factory.
-   * @param bufferSize       the buffer size.
-   * @param eTag             the eTag.
+   * @param blockFactory the block factory.
+   * @param bufferSize the buffer size.
+   * @param eTag the eTag.
+   * @param clientHandler the client handler.
    * @throws AzureBlobFileSystemException if an error occurs.
    */
   public AzureDfsToBlobIngressFallbackHandler(AbfsOutputStream abfsOutputStream,
@@ -257,6 +258,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
       LOG.error("Failed to upload current buffer of length {} and path {}", bytesLength, abfsOutputStream.getPath(), ex);
       abfsOutputStream.getOutputStreamStatistics().uploadFailed(bytesLength);
       abfsOutputStream.failureWhileSubmit(ex);
+      throw ex;
     }
   }
 }

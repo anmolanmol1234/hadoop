@@ -33,14 +33,6 @@ public class AbfsBlock implements Closeable {
   private final long offset;
   private BlockEntry blockEntry;
 
-  public BlockEntry getBlockEntry() {
-    return blockEntry;
-  }
-
-  public void setBlockEntry(final BlockEntry blockEntry) {
-    this.blockEntry = blockEntry;
-  }
-
   /**
    * Gets the activeBlock and the blockId.
    * @param outputStream AbfsOutputStream Instance.
@@ -74,9 +66,10 @@ public class AbfsBlock implements Closeable {
   }
 
   /**
-   * Return instance of BlockUploadData.
-   * @return instance of BlockUploadData.
-   * @throws IOException
+   * Returns an instance of BlockUploadData.
+   *
+   * @return an instance of BlockUploadData.
+   * @throws IOException if an I/O error occurs during the upload process.
    */
   public DataBlocks.BlockUploadData startUpload() throws IOException {
     return activeBlock.startUpload();
@@ -91,13 +84,15 @@ public class AbfsBlock implements Closeable {
   }
 
   /**
-   * Write a series of bytes from the buffer, from the offset. Returns the number of bytes written.
-   * Only valid in the state Writing. Base class verifies the state but does no writing.
-   * @param buffer buffer.
-   * @param offset offset.
-   * @param length length.
-   * @return number of bytes written.
-   * @throws IOException
+   * Writes a series of bytes from the buffer, starting from the specified offset.
+   * Returns the number of bytes written. Only valid in the state Writing.
+   * The base class verifies the state but does no writing.
+   *
+   * @param buffer the buffer containing the bytes to write.
+   * @param offset the offset in the buffer to start writing from.
+   * @param length the number of bytes to write.
+   * @return the number of bytes written.
+   * @throws IOException if an I/O error occurs.
    */
   public int write(byte[] buffer, int offset, int length) throws IOException {
     return activeBlock.write(buffer, offset, length);
@@ -111,6 +106,11 @@ public class AbfsBlock implements Closeable {
     return activeBlock.remainingCapacity();
   }
 
+  /**
+   * Returns the offset of the block.
+   *
+   * @return the offset of the block.
+   */
   public Long getOffset() {
     return offset;
   }
@@ -128,5 +128,41 @@ public class AbfsBlock implements Closeable {
    */
   public String getBlockId() {
     throw new IllegalArgumentException("DFS client does not support blockId");
+  }
+
+  /**
+   * Gets the AbfsOutputStream.
+   *
+   * @return the AbfsOutputStream.
+   */
+  public AbfsOutputStream getOutputStream() {
+    return outputStream;
+  }
+
+  /**
+   * Sets the AbfsOutputStream.
+   *
+   * @param outputStream the AbfsOutputStream to set.
+   */
+  public void setOutputStream(final AbfsOutputStream outputStream) {
+    this.outputStream = outputStream;
+  }
+
+  /**
+   * Returns the block entry.
+   *
+   * @return the block entry.
+   */
+  public BlockEntry getBlockEntry() {
+    return blockEntry;
+  }
+
+  /**
+   * Sets the block entry.
+   *
+   * @param blockEntry the block entry to set.
+   */
+  public void setBlockEntry(final BlockEntry blockEntry) {
+    this.blockEntry = blockEntry;
   }
 }

@@ -199,8 +199,8 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     this.blockFactory = abfsOutputStreamContext.getBlockFactory();
     this.isDFSToBlobFallbackEnabled
         = abfsOutputStreamContext.isDFSToBlobFallbackEnabled();
-    this.serviceTypeAtInit = this.currentExecutingServiceType =
-        abfsOutputStreamContext.getIngressServiceType();
+    this.serviceTypeAtInit = abfsOutputStreamContext.getIngressServiceType();
+    this.currentExecutingServiceType = abfsOutputStreamContext.getIngressServiceType();
     this.clientHandler = abfsOutputStreamContext.getClientHandler();
     createIngressHandler(serviceTypeAtInit,
         abfsOutputStreamContext.getBlockFactory(), bufferSize, false, null);
@@ -483,6 +483,10 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     }
   }
 
+  private synchronized AbfsPerfTracker getAbfsPerfTracker() {
+    return client.getAbfsPerfTracker();
+  }
+
   /**
    * Upload a block of data.
    * This will take the block.
@@ -510,8 +514,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     DataBlocks.BlockUploadData blockUploadData = blockToUpload.startUpload();
     final Future<Void> job =
         executorService.submit(() -> {
-          AbfsPerfTracker tracker =
-              client.getAbfsPerfTracker();
+          AbfsPerfTracker tracker = getAbfsPerfTracker();
           try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(tracker,
               "writeCurrentBufferToService", "append")) {
             AppendRequestParameters.Mode
@@ -877,8 +880,8 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
             tracingContext);
       } catch (AzureBlobFileSystemException ex) {
         // Handle specific Azure Blob FileSystem exceptions
-        if (ex instanceof AbfsRestOperationException &&
-            ((AbfsRestOperationException) ex).getStatusCode()
+        if (ex instanceof AbfsRestOperationException
+            && ((AbfsRestOperationException) ex).getStatusCode()
                 == HttpURLConnection.HTTP_NOT_FOUND) {
           throw new FileNotFoundException(ex.getMessage());
         }
@@ -1039,7 +1042,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
    * @return The Azure Blob Storage client.
    */
   @VisibleForTesting
-  AbfsClient getClient() {
+  synchronized AbfsClient getClient() {
     return client;
   }
 
@@ -1066,7 +1069,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
    *
    * @return The current position in the stream.
    */
-  public long getPosition() {
+  public synchronized long getPosition() {
     return position;
   }
 
@@ -1075,7 +1078,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
    *
    * @param position The position to set.
    */
-  public void setPosition(final long position) {
+  public synchronized void setPosition(final long position) {
     this.position = position;
   }
 

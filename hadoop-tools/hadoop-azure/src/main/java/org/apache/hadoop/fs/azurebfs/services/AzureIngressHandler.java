@@ -21,7 +21,6 @@ package org.apache.hadoop.fs.azurebfs.services;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,9 +78,7 @@ public abstract class AzureIngressHandler {
    * @throws IOException if an I/O error occurs
    */
   protected abstract int bufferData(AbfsBlock block,
-      final byte[] data,
-      final int off,
-      final int length) throws IOException;
+      byte[] data, int off, int length) throws IOException;
 
   /**
    * Performs a remote write operation to upload a block.
@@ -109,10 +106,10 @@ public abstract class AzureIngressHandler {
    * @return the result of the REST operation
    * @throws IOException if an I/O error occurs
    */
-  protected abstract AbfsRestOperation remoteFlush(final long offset,
-      final boolean retainUncommittedData,
-      final boolean isClose,
-      final String leaseId,
+  protected abstract AbfsRestOperation remoteFlush(long offset,
+      boolean retainUncommittedData,
+      boolean isClose,
+      String leaseId,
       TracingContext tracingContext) throws IOException;
 
   /**
@@ -157,8 +154,8 @@ public abstract class AzureIngressHandler {
     }
     String errorCode = ex.getErrorCode().getErrorCode();
     if (errorCode != null) {
-      return ex.getStatusCode() == HTTP_CONFLICT &&
-          (Objects.equals(errorCode, AzureServiceErrorCode.BLOB_OPERATION_NOT_SUPPORTED.getErrorCode())
+      return ex.getStatusCode() == HTTP_CONFLICT
+          && (Objects.equals(errorCode, AzureServiceErrorCode.BLOB_OPERATION_NOT_SUPPORTED.getErrorCode())
               || Objects.equals(errorCode, AzureServiceErrorCode.INVALID_APPEND_OPERATION.getErrorCode()));
     }
     return false;

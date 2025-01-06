@@ -40,7 +40,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.FileSystemUriSchemes.ABFS_
  * It uses Blob Endpoint and ends up creating implicit paths in the storage account.
  * We will leverage this tool to create implicit paths in storage account for testing purposes.
  */
-public class AzcopyToolHelper {
+public final class AzcopyToolHelper {
 
   private File hadoopAzureDir;
   private String azcopyDirPath;

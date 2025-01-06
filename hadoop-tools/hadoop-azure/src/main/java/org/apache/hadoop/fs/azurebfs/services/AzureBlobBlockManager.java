@@ -79,7 +79,7 @@ public class AzureBlobBlockManager extends AzureBlockManager {
     if (activeBlock == null) {
       blockCount++;
       activeBlock = new AbfsBlobBlock(abfsOutputStream, position);
-      activeBlock.setBlockEntry(addNewEntry(activeBlock.getBlockId(),activeBlock.getOffset()));
+      activeBlock.setBlockEntry(addNewEntry(activeBlock.getBlockId(), activeBlock.getOffset()));
     }
     return activeBlock;
   }
@@ -115,8 +115,8 @@ public class AzureBlobBlockManager extends AzureBlockManager {
     if (!blockEntryList.isEmpty()) {
       BlockEntry lastEntry = blockEntryList.getLast();
       if (position <= lastEntry.getPosition()) {
-        throw new IOException("New block position " + position  + " must be greater than the last block position " +
-            lastEntry.getPosition() + " for path " + abfsOutputStream.getPath());
+        throw new IOException("New block position " + position  + " must be greater than the last block position "
+            + lastEntry.getPosition() + " for path " + abfsOutputStream.getPath());
       }
     }
     BlockEntry blockEntry = new BlockEntry(blockId, position, AbfsBlockStatus.NEW);
@@ -154,8 +154,8 @@ public class AzureBlobBlockManager extends AzureBlockManager {
         LOG.debug(
             "Block {} with position {} has status {}, flush cannot proceed.",
             current.getBlockId(), current.getPosition(), current.getStatus());
-        throw new IOException("Flush failed. Block " + current.getBlockId() +
-            " with position " + current.getPosition() + " has status "
+        throw new IOException("Flush failed. Block " + current.getBlockId()
+            + " with position " + current.getPosition() + " has status "
             + current.getStatus() + "for path " + abfsOutputStream.getPath());
       }
       if (!blockEntryList.isEmpty()) {

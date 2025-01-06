@@ -87,7 +87,6 @@ import static org.apache.hadoop.fs.store.DataBlocks.DataBlock.DestState.Closed;
 import static org.apache.hadoop.fs.store.DataBlocks.DataBlock.DestState.Writing;
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.isA;
 
 /**
  * Test append operations.
@@ -98,6 +97,10 @@ public class ITestAzureBlobFileSystemAppend extends
   private static final String TEST_FILE_PATH = "testfile";
 
   private static final String TEST_FOLDER_PATH = "testFolder";
+
+  private static final int TEN = 10;
+  private static final int TWENTY = 20;
+  private static final int THIRTY = 30;
 
   public ITestAzureBlobFileSystemAppend() throws Exception {
     super();
@@ -206,28 +209,28 @@ public class ITestAzureBlobFileSystemAppend extends
     Assume.assumeFalse(
         getConfiguration().getBoolean(FS_AZURE_TEST_APPENDBLOB_ENABLED, false));
     final AzureBlobFileSystem fs = getFileSystem();
-    Path TEST_FILE_PATH = new Path("testFile");
+    Path testPath = path(TEST_FILE_PATH);
     AzureBlobFileSystemStore.Permissions permissions
         = new AzureBlobFileSystemStore.Permissions(false,
         FsPermission.getDefault(), FsPermission.getUMask(fs.getConf()));
     fs.getAbfsStore().getClientHandler().getDfsClient().
-        createPath(makeQualified(TEST_FILE_PATH).toUri().getPath(), true, false,
+        createPath(makeQualified(testPath).toUri().getPath(), true, false,
             permissions, false, null,
             null, getTestTracingContext(fs, true));
     fs.getAbfsStore()
         .getAbfsConfiguration()
         .set(FS_AZURE_INGRESS_SERVICE_TYPE, AbfsServiceType.BLOB.name());
-    FSDataOutputStream outputStream = fs.append(TEST_FILE_PATH);
+    FSDataOutputStream outputStream = fs.append(testPath);
     AzureIngressHandler ingressHandler
         = ((AbfsOutputStream) outputStream.getWrappedStream()).getIngressHandler();
     AbfsClient client = ingressHandler.getClient();
     Assert.assertTrue("Blob client was not used before fallback",
         client instanceof AbfsBlobClient);
-    outputStream.write(10);
+    outputStream.write(TEN);
     outputStream.hsync();
-    outputStream.write(20);
+    outputStream.write(TWENTY);
     outputStream.hsync();
-    outputStream.write(30);
+    outputStream.write(THIRTY);
     outputStream.hsync();
     AzureIngressHandler ingressHandlerFallback
         = ((AbfsOutputStream) outputStream.getWrappedStream()).getIngressHandler();
@@ -253,7 +256,7 @@ public class ITestAzureBlobFileSystemAppend extends
         String.valueOf(AbfsServiceType.DFS));
     final AzureBlobFileSystem fs = (AzureBlobFileSystem) FileSystem.newInstance(
         conf);
-    Path TEST_FILE_PATH = new Path("testFile");
+    Path testPath = path(TEST_FILE_PATH);
     AzureBlobFileSystemStore.Permissions permissions
         = new AzureBlobFileSystemStore.Permissions(false,
         FsPermission.getDefault(), FsPermission.getUMask(fs.getConf()));
@@ -263,15 +266,15 @@ public class ITestAzureBlobFileSystemAppend extends
     fs.getAbfsStore().getAbfsConfiguration().set(FS_AZURE_INGRESS_SERVICE_TYPE,
         String.valueOf(AbfsServiceType.DFS));
     fs.getAbfsStore().getClientHandler().getBlobClient().
-        createPath(makeQualified(TEST_FILE_PATH).toUri().getPath(), true, false,
+        createPath(makeQualified(testPath).toUri().getPath(), true, false,
             permissions, false, null,
             null, getTestTracingContext(fs, true));
-    FSDataOutputStream outputStream = fs.append(TEST_FILE_PATH);
-    outputStream.write(10);
+    FSDataOutputStream outputStream = fs.append(testPath);
+    outputStream.write(TEN);
     outputStream.hsync();
-    outputStream.write(20);
+    outputStream.write(TWENTY);
     outputStream.hsync();
-    outputStream.write(30);
+    outputStream.write(THIRTY);
     outputStream.hsync();
   }
 
@@ -312,11 +315,11 @@ public class ITestAzureBlobFileSystemAppend extends
             permissions, true, null,
             null, getTestTracingContext(fs, true));
     FSDataOutputStream outputStream = fs.append(TEST_FILE_PATH);
-    outputStream.write(10);
+    outputStream.write(TEN);
     outputStream.hsync();
-    outputStream.write(20);
+    outputStream.write(TWENTY);
     outputStream.hsync();
-    outputStream.write(30);
+    outputStream.write(THIRTY);
     outputStream.hsync();
   }
 
@@ -341,28 +344,28 @@ public class ITestAzureBlobFileSystemAppend extends
         "abfsStore");
     privateField.setAccessible(true);
     privateField.set(fs, store);
-    Path TEST_FILE_PATH = new Path("testFile");
+    Path testPath = path(TEST_FILE_PATH);
     AzureBlobFileSystemStore.Permissions permissions
         = new AzureBlobFileSystemStore.Permissions(false,
         FsPermission.getDefault(), FsPermission.getUMask(fs.getConf()));
     fs.getAbfsStore().getClientHandler().getDfsClient().
-        createPath(makeQualified(TEST_FILE_PATH).toUri().getPath(), true, false,
+        createPath(makeQualified(testPath).toUri().getPath(), true, false,
             permissions, true, null,
             null, getTestTracingContext(fs, true));
     fs.getAbfsStore()
         .getAbfsConfiguration()
         .set(FS_AZURE_INGRESS_SERVICE_TYPE, AbfsServiceType.BLOB.name());
-    FSDataOutputStream outputStream = fs.append(TEST_FILE_PATH);
+    FSDataOutputStream outputStream = fs.append(testPath);
     AzureIngressHandler ingressHandler
         = ((AbfsOutputStream) outputStream.getWrappedStream()).getIngressHandler();
     AbfsClient client = ingressHandler.getClient();
     Assert.assertTrue("Blob client was not used before fallback",
         client instanceof AbfsBlobClient);
-    outputStream.write(10);
+    outputStream.write(TEN);
     outputStream.hsync();
-    outputStream.write(20);
+    outputStream.write(TWENTY);
     outputStream.hsync();
-    outputStream.write(30);
+    outputStream.write(THIRTY);
     outputStream.flush();
     AzureIngressHandler ingressHandlerFallback
         = ((AbfsOutputStream) outputStream.getWrappedStream()).getIngressHandler();
@@ -384,16 +387,16 @@ public class ITestAzureBlobFileSystemAppend extends
         AbfsServiceType.BLOB.name());
     AzureBlobFileSystem fs = (AzureBlobFileSystem) FileSystem.newInstance(
         configuration);
-    Path TEST_FILE_PATH = new Path("testFile");
+    Path testPath = path(TEST_FILE_PATH);
     AzureBlobFileSystemStore.Permissions permissions
         = new AzureBlobFileSystemStore.Permissions(false,
         FsPermission.getDefault(), FsPermission.getUMask(fs.getConf()));
     fs.getAbfsStore().getClientHandler().getBlobClient().
-        createPath(makeQualified(TEST_FILE_PATH).toUri().getPath(), true,
+        createPath(makeQualified(testPath).toUri().getPath(), true,
             false,
             permissions, false, null,
             null, getTestTracingContext(fs, true), getIsNamespaceEnabled(fs));
-    FSDataOutputStream outputStream = fs.append(TEST_FILE_PATH);
+    FSDataOutputStream outputStream = fs.append(testPath);
     AzureIngressHandler ingressHandler
         = ((AbfsOutputStream) outputStream.getWrappedStream()).getIngressHandler();
     Assert.assertTrue("Ingress handler instance is not correct",
@@ -402,16 +405,16 @@ public class ITestAzureBlobFileSystemAppend extends
     Assert.assertTrue("Blob client was not used correctly",
         client instanceof AbfsBlobClient);
 
-    Path TEST_FILE_PATH_1 = new Path("testFile1");
+    Path testPath1 = new Path("testFile1");
     fs.getAbfsStore().getClientHandler().getBlobClient().
-        createPath(makeQualified(TEST_FILE_PATH_1).toUri().getPath(), true,
+        createPath(makeQualified(testPath1).toUri().getPath(), true,
             false,
             permissions, false, null,
             null, getTestTracingContext(fs, true), getIsNamespaceEnabled(fs));
     fs.getAbfsStore()
         .getAbfsConfiguration()
         .set(FS_AZURE_INGRESS_SERVICE_TYPE, AbfsServiceType.DFS.name());
-    FSDataOutputStream outputStream1 = fs.append(TEST_FILE_PATH_1);
+    FSDataOutputStream outputStream1 = fs.append(testPath1);
     AzureIngressHandler ingressHandler1
         = ((AbfsOutputStream) outputStream1.getWrappedStream()).getIngressHandler();
     Assert.assertTrue("Ingress handler instance is not correct",
@@ -880,7 +883,7 @@ public class ITestAzureBlobFileSystemAppend extends
 
     Mockito.doAnswer(answer -> {
           count.incrementAndGet();
-          while (count.get() < 2) ;
+          while (count.get() < 2);
           Thread.sleep(1000);
           throw new AbfsRestOperationException(503, "", "", new Exception());
         })
@@ -891,7 +894,7 @@ public class ITestAzureBlobFileSystemAppend extends
 
     Mockito.doAnswer(answer -> {
           count.incrementAndGet();
-          while (count.get() < 2) ;
+          while (count.get() < 2);
           Thread.sleep(1000);
           throw new AbfsRestOperationException(503, "", "", new Exception());
         })

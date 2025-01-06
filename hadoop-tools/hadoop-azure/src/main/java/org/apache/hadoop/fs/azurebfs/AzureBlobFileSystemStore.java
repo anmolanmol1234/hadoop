@@ -1114,7 +1114,6 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
 
     do {
       try (AbfsPerfInfo perfInfo = startTracking("rename", "renamePath")) {
-        boolean isNamespaceEnabled = getIsNamespaceEnabled(tracingContext);
         final AbfsClientRenameResult abfsClientRenameResult =
             getClient().renamePath(sourceRelativePath, destinationRelativePath,
                 continuation, tracingContext, sourceEtag, false);
@@ -1864,15 +1863,6 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
     // type is to be identified as default DFS.
     LOG.debug("Falling back to default service type DFS");
     return AbfsServiceType.DFS;
-  }
-
-  /**
-   * Retrieves the configured service type for the Azure Blob File System.
-   *
-   * @return the configured {@link AbfsServiceType} for the file system.
-   */
-  public AbfsServiceType getConfiguredServiceType() {
-    return abfsConfiguration.getFsConfiguredServiceType();
   }
 
   /**

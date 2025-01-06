@@ -21,10 +21,27 @@ package org.apache.hadoop.fs.azurebfs.contracts.exceptions;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 
+/**
+ * Exception thrown when an invalid ingress service is encountered.
+ *
+ * <p>This exception is used to indicate that the ingress service being used
+ * is not valid or supported. It extends the {@link AbfsRestOperationException}
+ * to provide additional context about the error.</p>
+ *
+ * @see AbfsRestOperationException
+ */
 @InterfaceAudience.Public
 @InterfaceStability.Evolving
-public final class InvalidIngressServiceException
-    extends AbfsRestOperationException {
+public final class InvalidIngressServiceException extends AbfsRestOperationException {
+
+  /**
+   * Constructs a new InvalidIngressServiceException with the specified details.
+   *
+   * @param statusCode the HTTP status code
+   * @param errorCode the error code
+   * @param errorMessage the error message
+   * @param innerException the inner exception
+   */
   public InvalidIngressServiceException(final int statusCode,
       final String errorCode,
       final String errorMessage,

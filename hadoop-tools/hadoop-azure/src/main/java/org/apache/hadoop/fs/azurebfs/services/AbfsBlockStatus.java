@@ -18,8 +18,30 @@
 
 package org.apache.hadoop.fs.azurebfs.services;
 
+/**
+ * Enum representing the status of an ABFS block.
+ *
+ * <p>This enum is used to indicate the current status of a block in the Azure Blob File System (ABFS).
+ * The possible statuses are:</p>
+ * <ul>
+ *   <li>NEW - The block is newly created and has not been processed yet.</li>
+ *   <li>SUCCESS - The block has been successfully processed.</li>
+ *   <li>FAILED - The block processing has failed.</li>
+ * </ul>
+ */
 public enum AbfsBlockStatus {
+  /**
+   * The block is newly created and has not been processed yet.
+   */
   NEW,
+
+  /**
+   * The block has been successfully processed.
+   */
   SUCCESS,
+
+  /**
+   * The block processing has failed.
+   */
   FAILED
 }

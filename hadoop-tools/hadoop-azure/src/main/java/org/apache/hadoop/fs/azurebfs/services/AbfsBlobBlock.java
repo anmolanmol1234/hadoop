@@ -51,7 +51,7 @@ public class AbfsBlobBlock extends AbfsBlock {
     String streamIdHash = Integer.toString(streamId.hashCode());
     String blockId = String.format("%d_%s", position, streamIdHash);
     byte[] blockIdByteArray = new byte[BLOCK_ID_LENGTH];
-    System.arraycopy(blockId.getBytes(), 0, blockIdByteArray, 0, Math.min(BLOCK_ID_LENGTH, blockId.length()));
+    System.arraycopy(blockId.getBytes(StandardCharsets.UTF_8), 0, blockIdByteArray, 0, Math.min(BLOCK_ID_LENGTH, blockId.length()));
     return new String(Base64.encodeBase64(blockIdByteArray), StandardCharsets.UTF_8);
   }
 

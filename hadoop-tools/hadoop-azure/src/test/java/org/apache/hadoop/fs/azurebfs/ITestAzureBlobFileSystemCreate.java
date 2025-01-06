@@ -21,7 +21,6 @@ package org.apache.hadoop.fs.azurebfs;
 import java.io.FileNotFoundException;
 import java.io.FilterOutputStream;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -32,7 +31,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.assertj.core.api.Assertions;
-import org.assertj.core.api.Assumptions;
 import org.junit.Assume;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -618,8 +616,8 @@ public class ITestAzureBlobFileSystemCreate extends
     Assertions.assertThat(fs.exists(new Path("a/b/c"))).isTrue();
     intercept(IOException.class, () -> fs.create(new Path("a/b/c")));
     // Asserting that directory still exists as explicit
-    Assertions.assertThat
-            (DirectoryStateHelper.isExplicitDirectory(new Path("a/b/c"),
+    Assertions.assertThat(
+            DirectoryStateHelper.isExplicitDirectory(new Path("a/b/c"),
                 fs, getTestTracingContext(fs, true)))
         .describedAs("Path is not an explicit directory")
         .isTrue();

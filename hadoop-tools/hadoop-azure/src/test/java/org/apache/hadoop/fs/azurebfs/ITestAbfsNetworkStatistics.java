@@ -58,7 +58,9 @@ public class ITestAbfsNetworkStatistics extends AbstractAbfsIntegrationTest {
    */
   private int countDirectory(String path) {
     int index = path.indexOf(getFileSystemName());
-    if (index == -1) return 0;
+    if (index == -1) {
+      return 0;
+    }
     return (int) path.substring(index + getFileSystemName().length()).chars()
         .filter(ch -> ch == '/').count();
   }
@@ -96,7 +98,7 @@ public class ITestAbfsNetworkStatistics extends AbstractAbfsIntegrationTest {
         // Per directory we have 2 calls :- GetBlobProperties and PutBlob and 1 ListBlobs call (implicit check) for the path.
         expectedConnectionsMade += ((directory * 2) + 1);
       } else {
-        expectedRequestsSent ++;
+        expectedRequestsSent++;
         expectedConnectionsMade++;
       }
       // --------------------------------------------------------------------

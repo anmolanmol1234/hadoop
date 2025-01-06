@@ -52,9 +52,11 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
    * Constructs an AzureBlobIngressHandler.
    *
    * @param abfsOutputStream the AbfsOutputStream.
-   * @param blockFactory     the block factory.
-   * @param bufferSize       the buffer size.
-   * @param eTag             the eTag.
+   * @param blockFactory the block factory.
+   * @param bufferSize the buffer size.
+   * @param eTag the eTag.
+   * @param clientHandler the client handler.
+   * @param blockManager the block manager.
    * @throws AzureBlobFileSystemException if an error occurs.
    */
   public AzureBlobIngressHandler(AbfsOutputStream abfsOutputStream,
@@ -244,7 +246,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
    */
   @VisibleForTesting
   @Override
-  synchronized public String getETag() {
+  public synchronized String getETag() {
     return eTag;
   }
 
@@ -313,6 +315,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
       LOG.error("Failed to upload current buffer of length {} and path {}", bytesLength, abfsOutputStream.getPath(), ex);
       abfsOutputStream.getOutputStreamStatistics().uploadFailed(bytesLength);
       abfsOutputStream.failureWhileSubmit(ex);
+      throw ex;
     }
   }
 
