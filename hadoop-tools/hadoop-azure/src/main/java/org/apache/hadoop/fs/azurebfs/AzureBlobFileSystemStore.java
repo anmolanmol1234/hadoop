@@ -302,7 +302,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
   public void updateClientWithNamespaceInfo(TracingContext tracingContext)
       throws AzureBlobFileSystemException {
     boolean isNamespaceEnabled = getIsNamespaceEnabled(tracingContext);
-    getClient().setIsNamespaceEnabled(isNamespaceEnabled);
+    AbfsClient.setIsNamespaceEnabled(isNamespaceEnabled);
   }
 
   /**

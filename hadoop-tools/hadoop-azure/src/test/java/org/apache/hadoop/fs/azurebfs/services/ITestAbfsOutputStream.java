@@ -213,7 +213,7 @@ public class ITestAbfsOutputStream extends AbstractAbfsIntegrationTest {
     Mockito.doReturn(spiedClient).when(os).getClient();
     fs.delete(path, true);
     os.write(1);
-    if( spiedClient instanceof AbfsDfsClient) {
+    if (spiedClient instanceof AbfsDfsClient) {
       intercept(FileNotFoundException.class, os::close);
     } else {
       IOException ex = intercept(IOException.class, os::close);

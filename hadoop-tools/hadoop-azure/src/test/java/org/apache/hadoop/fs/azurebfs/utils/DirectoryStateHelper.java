@@ -38,7 +38,7 @@ import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
  */
 public class DirectoryStateHelper {
 
-  public DirectoryStateHelper() {
+  private DirectoryStateHelper() {
   }
 
   /**

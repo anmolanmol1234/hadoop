@@ -311,11 +311,6 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
         perfInfo.registerResult(op.getResult());
         perfInfo.registerSuccess(true);
       }
-    } catch (Exception ex) {
-      LOG.error("Failed to upload current buffer of length {} and path {}", bytesLength, abfsOutputStream.getPath(), ex);
-      abfsOutputStream.getOutputStreamStatistics().uploadFailed(bytesLength);
-      abfsOutputStream.failureWhileSubmit(ex);
-      throw ex;
     }
   }
 

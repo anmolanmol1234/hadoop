@@ -301,7 +301,7 @@ public class ITestAzureBlobFileSystemAppend extends
         "abfsStore");
     privateField.setAccessible(true);
     privateField.set(fs, store);
-    Path TEST_FILE_PATH = new Path("testFile");
+    Path testPath = path(TEST_FILE_PATH);
     AzureBlobFileSystemStore.Permissions permissions
         = new AzureBlobFileSystemStore.Permissions(false,
         FsPermission.getDefault(), FsPermission.getUMask(fs.getConf()));
@@ -311,10 +311,10 @@ public class ITestAzureBlobFileSystemAppend extends
     fs.getAbfsStore().getAbfsConfiguration().set(FS_AZURE_INGRESS_SERVICE_TYPE,
         String.valueOf(AbfsServiceType.DFS));
     fs.getAbfsStore().getClientHandler().getBlobClient().
-        createPath(makeQualified(TEST_FILE_PATH).toUri().getPath(), true, false,
+        createPath(makeQualified(testPath).toUri().getPath(), true, false,
             permissions, true, null,
             null, getTestTracingContext(fs, true));
-    FSDataOutputStream outputStream = fs.append(TEST_FILE_PATH);
+    FSDataOutputStream outputStream = fs.append(testPath);
     outputStream.write(TEN);
     outputStream.hsync();
     outputStream.write(TWENTY);
@@ -632,11 +632,11 @@ public class ITestAzureBlobFileSystemAppend extends
   public void testParallelWriteOutputStreamClose() throws Exception {
     AzureBlobFileSystem fs = getFileSystem();
     Assume.assumeFalse("Not valid for APPEND BLOB", isAppendBlobEnabled());
-    final Path SECONDARY_FILE_PATH = new Path("secondarytestfile");
+    final Path secondarytestfile = new Path("secondarytestfile");
     ExecutorService executorService = Executors.newFixedThreadPool(2);
     List<Future<?>> futures = new ArrayList<>();
 
-    FSDataOutputStream out1 = fs.create(SECONDARY_FILE_PATH);
+    FSDataOutputStream out1 = fs.create(secondarytestfile);
     AbfsClient abfsClient = fs.getAbfsStore()
         .getClientHandler()
         .getIngressClient();
@@ -649,7 +649,7 @@ public class ITestAzureBlobFileSystemAppend extends
     final byte[] b2 = new byte[8 * ONE_MB];
     new Random().nextBytes(b2);
 
-    FSDataOutputStream out2 = fs.append(SECONDARY_FILE_PATH);
+    FSDataOutputStream out2 = fs.append(secondarytestfile);
 
     // Submit tasks to write to each output stream
     futures.add(executorService.submit(() -> {
@@ -691,7 +691,7 @@ public class ITestAzureBlobFileSystemAppend extends
     // Validate that the data written in the buffer is the same as what was read
     final byte[] readBuffer = new byte[8 * ONE_MB];
     int result;
-    FSDataInputStream inputStream = fs.open(SECONDARY_FILE_PATH);
+    FSDataInputStream inputStream = fs.open(secondarytestfile);
     inputStream.seek(0);
 
     AbfsOutputStream outputStream2 = (AbfsOutputStream) out1.getWrappedStream();

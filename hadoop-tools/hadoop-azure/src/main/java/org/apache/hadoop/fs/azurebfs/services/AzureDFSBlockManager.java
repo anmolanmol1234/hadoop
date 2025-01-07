@@ -57,7 +57,7 @@ public class AzureDFSBlockManager extends AzureBlockManager {
    * @throws IOException if an I/O error occurs
    */
   @Override
-  protected synchronized AbfsBlock createBlockInternal(final long position)
+  protected synchronized AbfsBlock createBlockInternal(long position)
       throws IOException {
     if (activeBlock == null) {
       blockCount++;
