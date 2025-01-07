@@ -47,9 +47,11 @@ public class AzureDFSIngressHandler extends AzureIngressHandler {
   /**
    * Constructs an AzureDFSIngressHandler.
    *
-   * @param abfsOutputStream the AbfsOutputStream.
+   * @param abfsOutputStream the AbfsOutputStream instance.
+   * @param clientHandler the AbfsClientHandler instance.
    */
-  public AzureDFSIngressHandler(AbfsOutputStream abfsOutputStream, AbfsClientHandler clientHandler) {
+  public AzureDFSIngressHandler(AbfsOutputStream abfsOutputStream,
+      AbfsClientHandler clientHandler) {
     super(abfsOutputStream);
     this.dfsClient = clientHandler.getDfsClient();
   }
