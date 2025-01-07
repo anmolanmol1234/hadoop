@@ -698,6 +698,7 @@ public class AbfsBlobClient extends AbfsClient {
    * @param sourceEtag                etag of source file. may be null or empty
    * @param isMetadataIncompleteState was there a rename failure due to
    *                                  incomplete metadata state?
+   * @param isNamespaceEnabled        whether namespace enabled account or not
    * @return result of rename operation
    * @throws IOException if rename operation fails.
    */
@@ -707,7 +708,8 @@ public class AbfsBlobClient extends AbfsClient {
       final String continuation,
       final TracingContext tracingContext,
       final String sourceEtag,
-      final boolean isMetadataIncompleteState) throws IOException {
+      final boolean isMetadataIncompleteState,
+      final boolean isNamespaceEnabled) throws IOException {
     /**
      * TODO: [FnsOverBlob] To be implemented as part of rename-delete over blob endpoint work. <a href="https://issues.apache.org/jira/browse/HADOOP-19233">HADOOP-19233</a>.
      */
@@ -1159,6 +1161,7 @@ public class AbfsBlobClient extends AbfsClient {
    * @param recursive if the path is a directory, delete recursively.
    * @param continuation to specify continuation token.
    * @param tracingContext for tracing the server calls.
+   * @param isNamespaceEnabled specify if the namespace is enabled.
    * @return executed rest operation containing response from server.
    * @throws AzureBlobFileSystemException if rest operation fails.
    */
@@ -1166,7 +1169,8 @@ public class AbfsBlobClient extends AbfsClient {
   public AbfsRestOperation deletePath(final String path,
       final boolean recursive,
       final String continuation,
-      TracingContext tracingContext) throws AzureBlobFileSystemException {
+      TracingContext tracingContext,
+      final boolean isNamespaceEnabled) throws AzureBlobFileSystemException {
     // TODO: [FnsOverBlob][HADOOP-19233] To be implemented as part of rename-delete over blob endpoint work.
     throw new NotImplementedException("Delete operation on Blob endpoint will be implemented in future.");
   }
