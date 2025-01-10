@@ -627,15 +627,4 @@ public abstract class AbstractAbfsIntegrationTest extends
     Assume.assumeTrue("Blob service type is required for this test",
         getAbfsServiceType() == AbfsServiceType.BLOB);
   }
-
-  /**
-   * Assert that the path contains the expected DNS suffix.
-   * If service type is blob, then path should have blob domain name.
-   * @param path to be asserted.
-   */
-  protected void assertPathDns(Path path) {
-    String expectedDns = getAbfsServiceType() == AbfsServiceType.BLOB
-        ? ABFS_BLOB_DOMAIN_NAME : ABFS_DFS_DOMAIN_NAME;
-    Assertions.assertThat(path.toString()).contains(expectedDns);
-  }
 }

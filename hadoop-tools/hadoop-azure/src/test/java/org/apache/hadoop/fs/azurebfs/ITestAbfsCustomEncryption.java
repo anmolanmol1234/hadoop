@@ -92,6 +92,7 @@ public class ITestAbfsCustomEncryption extends AbstractAbfsIntegrationTest {
 
   private final byte[] cpk = new byte[ENCRYPTION_KEY_LEN];
   private final String cpkSHAEncoded;
+  private static final String BLOCK_ID = "MF8tNDE1MjkzOTE4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
   private List<AzureBlobFileSystem> fileSystemsOpenedInTest = new ArrayList<>();
 
@@ -257,6 +258,7 @@ public class ITestAbfsCustomEncryption extends AbstractAbfsIntegrationTest {
     AbfsClient client = fs.getAbfsClient();
     AbfsClient ingressClient = fs.getAbfsStore().getClientHandler().getIngressClient();
     AbfsClientUtils.setEncryptionContextProvider(client, ecp);
+    AbfsClientUtils.setEncryptionContextProvider(ingressClient, ecp);
     if (isExceptionCase) {
       LambdaTestUtils.intercept(IOException.class, () -> {
         switch (operation) {
@@ -339,7 +341,7 @@ public class ITestAbfsCustomEncryption extends AbstractAbfsIntegrationTest {
         } else {
           return ingressClient.append(path, "val".getBytes(),
               new AppendRequestParameters(3, 0, 3, APPEND_MODE, false, null,
-                  true, new BlobAppendRequestParameters("MF8tNDE1MjkzOTE4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", null)),
+                  true, new BlobAppendRequestParameters(BLOCK_ID, null)),
               null, encryptionAdapter, getTestTracingContext(fs, false));
         }
       case SET_ACL:

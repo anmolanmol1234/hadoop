@@ -58,6 +58,7 @@ import org.apache.hadoop.fs.FSExceptionMessages;
 import org.apache.hadoop.fs.StreamCapabilities;
 import org.apache.hadoop.fs.Syncable;
 
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPEND_ACTION;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.STREAM_ID_LEN;
 import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.ERR_WRITE_WITHOUT_LEASE;
 import static org.apache.hadoop.fs.impl.StoreImplementationUtils.isProbeForSyncable;
@@ -483,10 +484,6 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     }
   }
 
-  private synchronized AbfsPerfTracker getAbfsPerfTracker() {
-    return client.getAbfsPerfTracker();
-  }
-
   /**
    * Upload a block of data.
    * This will take the block.
@@ -514,9 +511,10 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     DataBlocks.BlockUploadData blockUploadData = blockToUpload.startUpload();
     final Future<Void> job =
         executorService.submit(() -> {
-          AbfsPerfTracker tracker = getAbfsPerfTracker();
+          AbfsPerfTracker tracker =
+              client.getAbfsPerfTracker();
           try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(tracker,
-              "writeCurrentBufferToService", "append")) {
+              "writeCurrentBufferToService", APPEND_ACTION)) {
             AppendRequestParameters.Mode
                 mode = APPEND_MODE;
             if (isFlush & isClose) {
@@ -1042,7 +1040,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
    * @return The Azure Blob Storage client.
    */
   @VisibleForTesting
-  synchronized AbfsClient getClient() {
+  AbfsClient getClient() {
     return client;
   }
 

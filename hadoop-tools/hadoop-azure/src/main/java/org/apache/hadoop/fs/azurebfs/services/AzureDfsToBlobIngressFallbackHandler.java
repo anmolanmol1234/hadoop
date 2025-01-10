@@ -34,6 +34,10 @@ import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
 import org.apache.hadoop.fs.store.DataBlocks;
 import org.apache.hadoop.io.IOUtils;
 
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPEND_ACTION;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.FALLBACK_APPEND;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.FALLBACK_FLUSH;
+
 /**
  * Handles the fallback mechanism for Azure Blob Ingress operations.
  */
@@ -106,9 +110,8 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
       TracingContext tracingContext) throws IOException {
     AbfsRestOperation op;
     TracingContext tracingContextAppend = new TracingContext(tracingContext);
-    long threadId = Thread.currentThread().getId();
-    String threadIdStr = String.valueOf(threadId);
-    tracingContextAppend.setIngressHandler("FBAppend T " + threadIdStr);
+    String threadIdStr = String.valueOf(Thread.currentThread().getId());
+    tracingContextAppend.setIngressHandler(FALLBACK_APPEND + " T " + threadIdStr);
     tracingContextAppend.setPosition(String.valueOf(blockToUpload.getOffset()));
     try {
       op = super.remoteWrite(blockToUpload, uploadData, reqParams,
@@ -149,7 +152,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
     }
     try {
       TracingContext tracingContextFlush = new TracingContext(tracingContext);
-      tracingContextFlush.setIngressHandler("FBFlush");
+      tracingContextFlush.setIngressHandler(FALLBACK_FLUSH);
       tracingContextFlush.setPosition(String.valueOf(offset));
       op = super.remoteFlush(offset, retainUncommitedData, isClose, leaseId,
           tracingContextFlush);
@@ -221,7 +224,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
     // Perform the upload within a performance tracking context.
     try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(
         getClient().getAbfsPerfTracker(),
-        "writeCurrentBufferToService", "append")) {
+        "writeCurrentBufferToService", APPEND_ACTION)) {
       LOG.trace("Writing current buffer to service at offset {} and path {}", offset, abfsOutputStream.getPath());
       AppendRequestParameters reqParams = new AppendRequestParameters(
           offset, 0, bytesLength, AppendRequestParameters.Mode.APPEND_MODE,

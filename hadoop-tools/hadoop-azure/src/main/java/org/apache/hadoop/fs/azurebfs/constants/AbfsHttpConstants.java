@@ -254,23 +254,23 @@ public final class AbfsHttpConstants {
   /**
    * XML version declaration for the block list.
    */
-  public static final String XML_VERSION = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>%n";
+  public static final String XML_VERSION = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
 
   /**
    * Start tag for the block list XML.
    */
-  public static final String BLOCK_LIST_START_TAG = "<BlockList>%n";
+  public static final String BLOCK_LIST_START_TAG = "<BlockList>\n";
 
   /**
    * End tag for the block list XML.
    */
-  public static final String BLOCK_LIST_END_TAG = "</BlockList>%n";
+  public static final String BLOCK_LIST_END_TAG = "</BlockList>\n";
 
   /**
    * Format string for the latest block in the block list XML.
    * The placeholder will be replaced with the block identifier.
    */
-  public static final String LATEST_BLOCK_FORMAT = "<Latest>%s</Latest>%n";
+  public static final String LATEST_BLOCK_FORMAT = "<Latest>%s</Latest>\n";
 
 
   /**
@@ -313,6 +313,12 @@ public final class AbfsHttpConstants {
   public static final String APACHE_IMPL = "Apache";
   public static final String JDK_FALLBACK = "JDK_fallback";
   public static final String KEEP_ALIVE_CACHE_CLOSED = "KeepAliveCache is closed";
+  public static final String DFS_FLUSH = "DFlush";
+  public static final String DFS_APPEND = "DAppend";
+  public static final String BLOB_FLUSH = "BFlush";
+  public static final String BLOB_APPEND = "BAppend";
+  public static final String FALLBACK_FLUSH = "FBFlush";
+  public static final String FALLBACK_APPEND = "FBAppend";
 
   private AbfsHttpConstants() {}
 }

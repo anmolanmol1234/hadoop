@@ -28,6 +28,9 @@ import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
 import org.apache.hadoop.fs.store.DataBlocks;
 import org.apache.hadoop.io.IOUtils;
 
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPEND_ACTION;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.DFS_APPEND;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.DFS_FLUSH;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.EMPTY_STRING;
 
 /**
@@ -113,10 +116,9 @@ public class AzureDFSIngressHandler extends AzureIngressHandler {
       AppendRequestParameters reqParams,
       TracingContext tracingContext) throws IOException {
     TracingContext tracingContextAppend = new TracingContext(tracingContext);
-    long threadId = Thread.currentThread().getId();
-    String threadIdStr = String.valueOf(threadId);
+    String threadIdStr = String.valueOf(Thread.currentThread().getId());
     if (tracingContextAppend.getIngressHandler().equals(EMPTY_STRING)) {
-      tracingContextAppend.setIngressHandler("DAppend T " + threadIdStr);
+      tracingContextAppend.setIngressHandler(DFS_APPEND + " T " + threadIdStr);
       tracingContextAppend.setPosition(
           String.valueOf(blockToUpload.getOffset()));
     }
@@ -171,7 +173,7 @@ public class AzureDFSIngressHandler extends AzureIngressHandler {
       throws IOException {
     TracingContext tracingContextFlush = new TracingContext(tracingContext);
     if (tracingContextFlush.getIngressHandler().equals(EMPTY_STRING)) {
-      tracingContextFlush.setIngressHandler("DFlush");
+      tracingContextFlush.setIngressHandler(DFS_FLUSH);
       tracingContextFlush.setPosition(String.valueOf(offset));
     }
     LOG.trace("Flushing data at offset {} and path {}", offset, abfsOutputStream.getPath());
@@ -215,7 +217,7 @@ public class AzureDFSIngressHandler extends AzureIngressHandler {
     // Perform the upload within a performance tracking context.
     try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(
         dfsClient.getAbfsPerfTracker(),
-        "writeCurrentBufferToService", "append")) {
+        "writeCurrentBufferToService", APPEND_ACTION)) {
       LOG.trace("Writing current buffer to service at offset {} and path {}", offset, abfsOutputStream.getPath());
       AppendRequestParameters reqParams = new AppendRequestParameters(
           offset, 0, bytesLength, AppendRequestParameters.Mode.APPEND_MODE,
@@ -241,7 +243,6 @@ public class AzureDFSIngressHandler extends AzureIngressHandler {
       IOUtils.closeStreams(uploadData, activeBlock);
     }
   }
-
 
   /**
    * Gets the block manager.

@@ -35,6 +35,10 @@ import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
 import org.apache.hadoop.fs.store.DataBlocks;
 import org.apache.hadoop.io.IOUtils;
 
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPEND_ACTION;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOB_APPEND;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOB_FLUSH;
+
 public class AzureBlobIngressHandler extends AzureIngressHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(
@@ -116,10 +120,9 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
     BlobAppendRequestParameters blobParams = new BlobAppendRequestParameters(blockToUpload.getBlockId(), getETag());
     reqParams.setBlobParams(blobParams);
     AbfsRestOperation op;
-    long threadId = Thread.currentThread().getId();
-    String threadIdStr = String.valueOf(threadId);
+    String threadIdStr = String.valueOf(Thread.currentThread().getId());
     TracingContext tracingContextAppend = new TracingContext(tracingContext);
-    tracingContextAppend.setIngressHandler("BAppend T " + threadIdStr);
+    tracingContextAppend.setIngressHandler(BLOB_APPEND + " T " + threadIdStr);
     tracingContextAppend.setPosition(String.valueOf(blockToUpload.getOffset()));
     try {
       LOG.trace("Starting remote write for block with ID {} and offset {}",
@@ -172,7 +175,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
       String blockListXml = generateBlockListXml(
           blobBlockManager.getBlockIdList());
       TracingContext tracingContextFlush = new TracingContext(tracingContext);
-      tracingContextFlush.setIngressHandler("BFlush");
+      tracingContextFlush.setIngressHandler(BLOB_FLUSH);
       tracingContextFlush.setPosition(String.valueOf(offset));
       LOG.trace("Flushing data at offset {} for path {}", offset, abfsOutputStream.getPath());
       op = getClient().flush(blockListXml.getBytes(StandardCharsets.UTF_8),
@@ -279,7 +282,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
     // Perform the upload within a performance tracking context.
     try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(
         blobClient.getAbfsPerfTracker(),
-        "writeCurrentBufferToService", "append")) {
+        "writeCurrentBufferToService", APPEND_ACTION)) {
       LOG.trace("Writing current buffer to service at offset {} and path {}", offset, abfsOutputStream.getPath());
       AppendRequestParameters reqParams = new AppendRequestParameters(
           offset, 0, bytesLength, AppendRequestParameters.Mode.APPEND_MODE,

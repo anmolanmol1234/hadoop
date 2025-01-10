@@ -133,10 +133,10 @@ public abstract class AzureBlockManager {
    * Clears the active block.
    */
   void clearActiveBlock() {
+    if (activeBlock != null) {
+      LOG.debug("Clearing active block");
+    }
     synchronized (this) {
-      if (activeBlock != null) {
-        LOG.debug("Clearing active block");
-      }
       activeBlock = null;
     }
   }

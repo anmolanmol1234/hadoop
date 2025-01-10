@@ -93,11 +93,13 @@ public class AzureBlobBlockManager extends AzureBlockManager {
    */
   private List<String> getBlockList(TracingContext tracingContext)
       throws AzureBlobFileSystemException {
-    List<String> committedBlockIdList;
+    List<String> committedBlockIdList = new ArrayList<>();
     AbfsBlobClient blobClient = abfsOutputStream.getClientHandler().getBlobClient();
     final AbfsRestOperation op = blobClient
         .getBlockList(abfsOutputStream.getPath(), tracingContext);
-    committedBlockIdList = op.getResult().getBlockIdList();
+    if (op != null && op.getResult() != null) {
+      committedBlockIdList = op.getResult().getBlockIdList();
+    }
     return committedBlockIdList;
   }
 

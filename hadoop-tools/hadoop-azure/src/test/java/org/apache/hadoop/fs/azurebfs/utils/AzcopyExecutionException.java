@@ -20,6 +20,11 @@ package org.apache.hadoop.fs.azurebfs.utils;
 
 import java.io.IOException;
 
+/**
+ * Exception thrown when there is an error executing the Azcopy tool.
+ * This exception is used only in test code to indicate issues with the Azcopy tool execution.
+ * It provides a suggestion to delete the specified Azcopy tool directory and rerun the tests.
+ */
 public class AzcopyExecutionException extends IOException {
   private static final String SUGGESTION = "Try deleting the following azcopy tool directory and rerun tests: ";
 

@@ -65,6 +65,7 @@ public class ITestAbfsOutputStream extends AbstractAbfsIntegrationTest {
 
   private static final int TEST_EXECUTION_TIMEOUT = 2 * 60 * 1000;
   private static final String TEST_FILE_PATH = "testfile";
+  private static final int TEN = 10;
 
   @Parameterized.Parameter
   public HttpOperationType httpOperationType;
@@ -310,7 +311,7 @@ public class ITestAbfsOutputStream extends AbstractAbfsIntegrationTest {
     AzureBlobFileSystem fs = Mockito.spy(getFileSystem());
     Assume.assumeTrue(!getIsNamespaceEnabled(fs));
     AzureBlobFileSystemStore store = Mockito.spy(fs.getAbfsStore());
-    Assume.assumeTrue(store.getClient() instanceof AbfsBlobClient);
+    assumeBlobServiceType();
 
     // Mock the clientHandler to return the blobClient when getBlobClient is called
     AbfsClientHandler clientHandler = Mockito.spy(store.getClientHandler());
@@ -332,7 +333,7 @@ public class ITestAbfsOutputStream extends AbstractAbfsIntegrationTest {
     Mockito.doThrow(exception).when(blobClient).getBlockList(Mockito.anyString(), Mockito.any(TracingContext.class));
 
     // Create a non-empty file
-    os.write(10);
+    os.write(TEN);
     os.hsync();
     os.close();
 

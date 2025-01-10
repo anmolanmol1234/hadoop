@@ -40,6 +40,7 @@ import static org.apache.hadoop.fs.azurebfs.AbfsStatistic.BYTES_RECEIVED;
 import static org.apache.hadoop.fs.azurebfs.AbfsStatistic.CONNECTIONS_MADE;
 import static org.apache.hadoop.fs.azurebfs.AbfsStatistic.GET_RESPONSES;
 import static org.apache.hadoop.fs.azurebfs.AbfsStatistic.SEND_REQUESTS;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.FORWARD_SLASH;
 
 public class ITestAbfsNetworkStatistics extends AbstractAbfsIntegrationTest {
 
@@ -62,7 +63,7 @@ public class ITestAbfsNetworkStatistics extends AbstractAbfsIntegrationTest {
       return 0;
     }
     return (int) path.substring(index + getFileSystemName().length()).chars()
-        .filter(ch -> ch == '/').count();
+        .filter(ch -> ch == FORWARD_SLASH.charAt(0)).count();
   }
 
   /**
@@ -95,7 +96,7 @@ public class ITestAbfsNetworkStatistics extends AbstractAbfsIntegrationTest {
        // 1 create request = 1 connection made and 1 send request
       if (client instanceof AbfsBlobClient && !getIsNamespaceEnabled(fs)) {
         expectedRequestsSent += (directory);
-        // Per directory we have 2 calls :- GetBlobProperties and PutBlob and 1 ListBlobs call (implicit check) for the path.
+        // Per directory, we have 2 calls :- GetBlobProperties and PutBlob and 1 ListBlobs call (implicit check) for the path.
         expectedConnectionsMade += ((directory * 2) + 1);
       } else {
         expectedRequestsSent++;
@@ -154,6 +155,7 @@ public class ITestAbfsNetworkStatistics extends AbstractAbfsIntegrationTest {
     // Operation: AbfsOutputStream close.
     // Network Stats calculation: 1 flush (with close) is send.
     // 1 flush request = 1 connection and 1 send request
+    // Flush with no data is a no-op for blob endpoint, hence update only for dfs endpoint.
     if (client instanceof AbfsDfsClient) {
       expectedConnectionsMade++;
       expectedRequestsSent++;
@@ -173,7 +175,8 @@ public class ITestAbfsNetworkStatistics extends AbstractAbfsIntegrationTest {
        *    create overwrite=false (will fail in this case as file is indeed present)
        *    + getFileStatus to fetch the file ETag
        *    + create overwrite=true
-       *    = 3 connections and 2 send requests
+       *    = 3 connections and 2 send requests in case of Dfs Client
+       *    = 7 connections (5 GBP and 2 PutBlob calls) in case of Blob Client
        */
       if (fs.getAbfsStore().getAbfsConfiguration().isConditionalCreateOverwriteEnabled()) {
         if (client instanceof AbfsBlobClient && !getIsNamespaceEnabled(fs)) {

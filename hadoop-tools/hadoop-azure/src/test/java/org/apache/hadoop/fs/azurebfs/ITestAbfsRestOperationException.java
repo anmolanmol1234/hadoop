@@ -24,14 +24,12 @@ import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.azurebfs.constants.AbfsServiceType;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AbfsRestOperationException;
 import org.apache.hadoop.fs.azurebfs.contracts.services.AzureServiceErrorCode;
 import org.apache.hadoop.fs.azurebfs.oauth2.RetryTestTokenProvider;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.azurebfs.services.AbfsBlobClient;
-import org.apache.hadoop.fs.azurebfs.services.AbfsClient;
-import org.apache.hadoop.fs.azurebfs.services.AbfsDfsClient;
 
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_CREATE_REMOTE_FILESYSTEM_DURING_INITIALIZATION;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.AZURE_CUSTOM_TOKEN_FETCH_RETRY_COUNT;
@@ -59,7 +57,6 @@ public class ITestAbfsRestOperationException extends AbstractAbfsIntegrationTest
     final AzureBlobFileSystem fs = getFileSystem();
     Path nonExistedFilePath1 = new Path("nonExistedPath1");
     Path nonExistedFilePath2 = new Path("nonExistedPath2");
-    AbfsClient client = fs.getAbfsStore().getClient();
     try {
       fs.getFileStatus(nonExistedFilePath1);
     } catch (Exception ex) {
@@ -72,7 +69,7 @@ public class ITestAbfsRestOperationException extends AbstractAbfsIntegrationTest
               "Number of Fields in exception message are not as expected")
           .hasSize(5);
       // Check status message, status code, HTTP Request Type and URL.
-      if (client instanceof AbfsBlobClient) {
+      if (getAbfsServiceType() == AbfsServiceType.BLOB) {
         Assertions.assertThat(errorFields[0].trim())
             .describedAs("Error Message Field in exception message is wrong")
             .contains(
@@ -106,7 +103,7 @@ public class ITestAbfsRestOperationException extends AbstractAbfsIntegrationTest
     } catch (Exception ex) {
       String errorMessage = ex.getLocalizedMessage();
       String[] errorFields = errorMessage.split(",");
-      if (client instanceof AbfsDfsClient) {
+      if (getAbfsServiceType() == AbfsServiceType.DFS) {
         // verify its format
         // Expected Fields are: Message, StatusCode, Method, URL, ActivityId(rId), StorageErrorCode, StorageErrorMessage.
         Assertions.assertThat(errorFields)
