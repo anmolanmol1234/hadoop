@@ -202,12 +202,12 @@ public abstract class AzureIngressHandler {
    */
   public static String generateBlockListXml(List<String> blockIds) {
     StringBuilder stringBuilder = new StringBuilder();
-    stringBuilder.append(XML_VERSION);
-    stringBuilder.append(BLOCK_LIST_START_TAG);
+    stringBuilder.append(String.format(XML_VERSION));
+    stringBuilder.append(String.format(BLOCK_LIST_START_TAG));
     for (String blockId : blockIds) {
       stringBuilder.append(String.format(LATEST_BLOCK_FORMAT, blockId));
     }
-    stringBuilder.append(BLOCK_LIST_END_TAG);
+    stringBuilder.append(String.format(BLOCK_LIST_END_TAG));
     return stringBuilder.toString();
   }
 }

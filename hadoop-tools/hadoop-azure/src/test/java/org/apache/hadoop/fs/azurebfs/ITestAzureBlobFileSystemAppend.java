@@ -257,7 +257,7 @@ public class ITestAzureBlobFileSystemAppend extends
     conf.setBoolean(FS_AZURE_ENABLE_DFSTOBLOB_FALLBACK, true);
     conf.set(FS_AZURE_INGRESS_SERVICE_TYPE,
         String.valueOf(AbfsServiceType.DFS));
-    try (final AzureBlobFileSystem fs = (AzureBlobFileSystem) FileSystem.newInstance(
+    try (AzureBlobFileSystem fs = (AzureBlobFileSystem) FileSystem.newInstance(
         conf)) {
       Path testPath = path(TEST_FILE_PATH);
       AzureBlobFileSystemStore.Permissions permissions
@@ -297,7 +297,7 @@ public class ITestAzureBlobFileSystemAppend extends
     conf.setBoolean(FS_AZURE_ENABLE_DFSTOBLOB_FALLBACK, true);
     conf.set(FS_AZURE_INGRESS_SERVICE_TYPE,
         String.valueOf(AbfsServiceType.DFS));
-    try (final AzureBlobFileSystem fs = Mockito.spy(
+    try (AzureBlobFileSystem fs = Mockito.spy(
         (AzureBlobFileSystem) FileSystem.newInstance(conf))) {
       AzureBlobFileSystemStore store = Mockito.spy(fs.getAbfsStore());
       Mockito.doReturn(true).when(store).isAppendBlobKey(anyString());
@@ -492,7 +492,7 @@ public class ITestAzureBlobFileSystemAppend extends
         abfsClient instanceof AbfsBlobClient);
     FSDataOutputStream outputStream = fs.append(filePath);
     outputStream.write(TEN);
-    try (final AzureBlobFileSystem fs1
+    try (AzureBlobFileSystem fs1
         = (AzureBlobFileSystem) FileSystem.newInstance(getRawConfiguration());
     FSDataOutputStream outputStream1 = fs1.create(filePath)) {
       outputStream.hsync();
@@ -509,7 +509,7 @@ public class ITestAzureBlobFileSystemAppend extends
     fs.create(filePath);
     FSDataOutputStream outputStream = fs.append(filePath);
     outputStream.write(TEN);
-    try (final AzureBlobFileSystem fs1
+    try (AzureBlobFileSystem fs1
         = (AzureBlobFileSystem) FileSystem.newInstance(getRawConfiguration())) {
       fs1.mkdirs(filePath);
       outputStream.hsync();
@@ -705,15 +705,13 @@ public class ITestAzureBlobFileSystemAppend extends
 
     if (!fileETag.equals(out1Etag)) {
       result = inputStream.read(readBuffer, 0, 4 * ONE_MB);
-      assertEquals(result,
-          200); // Verify that the number of bytes read matches the number of bytes written
+      assertEquals(result, 2 * HUNDRED); // Verify that the number of bytes read matches the number of bytes written
       assertArrayEquals(
           Arrays.copyOfRange(readBuffer, 0, result), Arrays.copyOfRange(b1, 0,
               result)); // Verify that the data read matches the original data written
     } else if (!fileETag.equals(out2Etag)) {
       result = inputStream.read(readBuffer, 0, 4 * ONE_MB);
-      assertEquals(result,
-          400); // Verify that the number of bytes read matches the number of bytes written
+      assertEquals(result, 4 * HUNDRED); // Verify that the number of bytes read matches the number of bytes written
       assertArrayEquals(Arrays.copyOfRange(readBuffer, 0, result),
           Arrays.copyOfRange(b2, 0,
               result)); // Verify that the data read matches the original data written

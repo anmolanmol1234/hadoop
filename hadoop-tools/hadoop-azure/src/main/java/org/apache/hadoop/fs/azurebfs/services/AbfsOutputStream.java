@@ -74,7 +74,7 @@ import static org.apache.hadoop.util.Preconditions.checkState;
 public class AbfsOutputStream extends OutputStream implements Syncable,
     StreamCapabilities, IOStatisticsSource {
 
-  private AbfsClient client;
+  private volatile AbfsClient client;
   private final String path;
   /** The position in the file being uploaded, where the next block would be
    * uploaded.
@@ -122,9 +122,6 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
 
   /** Factory for blocks. */
   private final DataBlocks.BlockFactory blockFactory;
-
-  /** Current data block. Null means none currently active. */
-  private DataBlocks.DataBlock activeBlock;
 
   /** Count of blocks uploaded. */
   private long blockCount = 0;
@@ -479,8 +476,10 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
       uploadBlockAsync(getBlockManager().getActiveBlock(),
           false, false);
     } finally {
-      // set the block to null, so the next write will create a new block.
-      getBlockManager().clearActiveBlock();
+      if (getBlockManager().hasActiveBlock()) {
+        // set the block to null, so the next write will create a new block.
+        getBlockManager().clearActiveBlock();
+      }
     }
   }
 
@@ -512,7 +511,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     final Future<Void> job =
         executorService.submit(() -> {
           AbfsPerfTracker tracker =
-              client.getAbfsPerfTracker();
+              getClient().getAbfsPerfTracker();
           try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(tracker,
               "writeCurrentBufferToService", APPEND_ACTION)) {
             AppendRequestParameters.Mode
@@ -583,18 +582,6 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     AzureBlockManager blockManager = getBlockManager();
     AbfsBlock activeBlock = blockManager.getActiveBlock();
     return blockManager.hasActiveBlock() && activeBlock.hasData();
-  }
-
-  /**
-   * Clear the active block.
-   */
-  private void clearActiveBlock() {
-    if (activeBlock != null) {
-      LOG.debug("Clearing active block");
-    }
-    synchronized (this) {
-      activeBlock = null;
-    }
   }
 
   /**
@@ -714,7 +701,9 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
       bufferIndex = 0;
       closed = true;
       writeOperations.clear();
-      getBlockManager().clearActiveBlock();
+      if (getBlockManager().hasActiveBlock()) {
+        getBlockManager().clearActiveBlock();
+      }
     }
     LOG.debug("Closing AbfsOutputStream : {}", this);
   }

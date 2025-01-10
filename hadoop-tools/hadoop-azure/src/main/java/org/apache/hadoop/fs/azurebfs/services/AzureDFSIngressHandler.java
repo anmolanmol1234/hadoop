@@ -206,7 +206,9 @@ public class AzureDFSIngressHandler extends AzureIngressHandler {
     DataBlocks.BlockUploadData uploadData = activeBlock.startUpload();
 
     // Clear active block and update statistics.
-    dfsBlockManager.clearActiveBlock();
+    if (dfsBlockManager.hasActiveBlock()) {
+      dfsBlockManager.clearActiveBlock();
+    }
     abfsOutputStream.getOutputStreamStatistics().writeCurrentBuffer();
     abfsOutputStream.getOutputStreamStatistics().bytesToUpload(bytesLength);
 

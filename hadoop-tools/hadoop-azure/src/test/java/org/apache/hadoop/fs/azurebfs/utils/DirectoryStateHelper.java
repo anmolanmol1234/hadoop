@@ -36,7 +36,7 @@ import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
  * This toll will be used by tests classes to assert that HDFS APIs work
  * seamlessly on implicit paths even with Blob Endpoint.
  */
-public class DirectoryStateHelper {
+public final class DirectoryStateHelper {
 
   private DirectoryStateHelper() {
   }
