@@ -118,10 +118,12 @@ import static org.apache.hadoop.fs.CommonConfigurationKeys.IOSTATISTICS_LOGGING_
 import static org.apache.hadoop.fs.Options.OpenFileOptions.FS_OPTION_OPENFILE_STANDARD_OPTIONS;
 import static org.apache.hadoop.fs.azurebfs.AbfsStatistic.*;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.CPK_IN_NON_HNS_ACCOUNT_ERROR_MESSAGE;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.UNAUTHORIZED_SAS;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.DATA_BLOCKS_BUFFER;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE_ACCOUNT_IS_HNS_ENABLED;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE_BLOCK_UPLOAD_ACTIVE_BLOCKS;
 import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE_BLOCK_UPLOAD_BUFFER_DIR;
+import static org.apache.hadoop.fs.azurebfs.constants.ConfigurationKeys.FS_AZURE_SAS_TOKEN_PROVIDER_TYPE;
 import static org.apache.hadoop.fs.azurebfs.constants.FSOperationType.CREATE_FILESYSTEM;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.BLOCK_UPLOAD_ACTIVE_BLOCKS_DEFAULT;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.DATA_BLOCKS_BUFFER_DEFAULT;
@@ -232,6 +234,27 @@ public class AzureBlobFileSystem extends FileSystem
     } catch (AzureBlobFileSystemException ex) {
       LOG.debug("Failed to determine account type for service type validation", ex);
       throw new InvalidConfigurationValueException(FS_AZURE_ACCOUNT_IS_HNS_ENABLED, ex);
+    }
+
+    /**
+     * Validates if the FixedSASTokenProvider is configured for non-HNS accounts.
+     * If the namespace is not enabled and the FixedSASTokenProvider is not configured,
+     * the filesystem is closed and an InvalidConfigurationValueException is thrown.
+     *
+     * @throws InvalidConfigurationValueException if the namespace is not enabled and the FixedSASTokenProvider is not configured.
+     */
+    try {
+      if (!getIsNamespaceEnabled(new TracingContext(initFSTracingContext))
+          && !abfsConfiguration.isFixedSASTokenProviderConfigured()) {
+        close();
+        throw new InvalidConfigurationValueException(
+            FS_AZURE_SAS_TOKEN_PROVIDER_TYPE, UNAUTHORIZED_SAS);
+      }
+    } catch (AzureBlobFileSystemException ex) {
+      LOG.debug("Failed to determine account type for auth type validation",
+          ex);
+      throw new InvalidConfigurationValueException(
+          FS_AZURE_ACCOUNT_IS_HNS_ENABLED, ex);
     }
 
     /*

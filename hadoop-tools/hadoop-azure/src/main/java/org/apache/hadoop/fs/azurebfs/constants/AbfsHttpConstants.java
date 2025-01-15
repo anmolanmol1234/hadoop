@@ -303,6 +303,13 @@ public final class AbfsHttpConstants {
           + "non-hierarchical-namespace account:"
           + CPK_CONFIG_LIST;
 
+
+  /**
+   * Exception message on filesystem init if token-provider-auth-type configs are provided
+   */
+  public static final String UNAUTHORIZED_SAS =
+      "Non-hierarchical namespace accounts only work with FixedSASTokenProvider.";
+
   /**
    * System property that define maximum number of cached-connection per fileSystem for
    * ApacheHttpClient. JDK network library uses the same property to define maximum
