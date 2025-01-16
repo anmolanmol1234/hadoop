@@ -38,6 +38,7 @@ import org.apache.hadoop.io.IOUtils;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPEND_ACTION;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOB_APPEND;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOB_FLUSH;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.EMPTY_STRING;
 
 public class AzureBlobIngressHandler extends AzureIngressHandler {
 
@@ -119,7 +120,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
       throws IOException {
     BlobAppendRequestParameters blobParams = new BlobAppendRequestParameters(blockToUpload.getBlockId(), getETag());
     reqParams.setBlobParams(blobParams);
-    AbfsRestOperation op;
+    AbfsRestOperation op = null;
     String threadIdStr = String.valueOf(Thread.currentThread().getId());
     TracingContext tracingContextAppend = new TracingContext(tracingContext);
     tracingContextAppend.setIngressHandler(BLOB_APPEND + " T " + threadIdStr);
@@ -136,7 +137,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
     } catch (AbfsRestOperationException ex) {
       LOG.error("Error in remote write requiring handler switch for path {}", abfsOutputStream.getPath(), ex);
       if (shouldIngressHandlerBeSwitched(ex)) {
-        throw getIngressHandlerSwitchException(ex);
+        throw getIngressHandlerSwitchException(ex, (op != null && op.getResult() != null) ? op.getResult().getRequestId() : EMPTY_STRING);
       }
       LOG.error("Error in remote write for path {} and offset {}", abfsOutputStream.getPath(),
           blockToUpload.getOffset(), ex);
@@ -163,7 +164,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
       final String leaseId,
       TracingContext tracingContext)
       throws IOException {
-    AbfsRestOperation op;
+    AbfsRestOperation op = null;
     if (abfsOutputStream.isAppendBlob()) {
       return null;
     }
@@ -186,7 +187,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
     } catch (AbfsRestOperationException ex) {
       LOG.error("Error in remote flush requiring handler switch for path {}", abfsOutputStream.getPath(), ex);
       if (shouldIngressHandlerBeSwitched(ex)) {
-        throw getIngressHandlerSwitchException(ex);
+        throw getIngressHandlerSwitchException(ex, (op != null && op.getResult() != null) ? op.getResult().getRequestId() : EMPTY_STRING);
       }
       LOG.error("Error in remote flush for path {} and offset {}", abfsOutputStream.getPath(), offset, ex);
       throw ex;
@@ -216,14 +217,14 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
       AppendRequestParameters reqParams,
       TracingContext tracingContext) throws IOException {
     // Perform the remote append operation using the blob client.
-    AbfsRestOperation op;
+    AbfsRestOperation op = null;
     try {
       op = blobClient.appendBlock(path, reqParams, uploadData.toByteArray(), tracingContext);
     } catch (AbfsRestOperationException ex) {
       LOG.error("Error in remote write requiring handler switch for path {}",
           abfsOutputStream.getPath(), ex);
       if (shouldIngressHandlerBeSwitched(ex)) {
-        throw getIngressHandlerSwitchException(ex);
+        throw getIngressHandlerSwitchException(ex, (op != null && op.getResult() != null) ? op.getResult().getRequestId() : EMPTY_STRING);
       }
       LOG.error("Error in remote write for path {} and offset {}",
           abfsOutputStream.getPath(),

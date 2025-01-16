@@ -35,6 +35,7 @@ import org.apache.hadoop.fs.store.DataBlocks;
 import org.apache.hadoop.io.IOUtils;
 
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPEND_ACTION;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.EMPTY_STRING;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.FALLBACK_APPEND;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.FALLBACK_FLUSH;
 
@@ -108,7 +109,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
       DataBlocks.BlockUploadData uploadData,
       AppendRequestParameters reqParams,
       TracingContext tracingContext) throws IOException {
-    AbfsRestOperation op;
+    AbfsRestOperation op = null;
     TracingContext tracingContextAppend = new TracingContext(tracingContext);
     String threadIdStr = String.valueOf(Thread.currentThread().getId());
     tracingContextAppend.setIngressHandler(FALLBACK_APPEND + " T " + threadIdStr);
@@ -120,7 +121,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
     } catch (AbfsRestOperationException ex) {
       if (shouldIngressHandlerBeSwitched(ex)) {
         LOG.error("Error in remote write requiring handler switch for path {}", abfsOutputStream.getPath(), ex);
-        throw getIngressHandlerSwitchException(ex);
+        throw getIngressHandlerSwitchException(ex, (op != null && op.getResult() != null) ? op.getResult().getRequestId() : EMPTY_STRING);
       }
       LOG.error("Error in remote write for path {} and offset {}", abfsOutputStream.getPath(),
           blockToUpload.getOffset(), ex);
@@ -146,7 +147,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
       final boolean isClose,
       final String leaseId,
       TracingContext tracingContext) throws IOException {
-    AbfsRestOperation op;
+    AbfsRestOperation op = null;
     if (!blobBlockManager.hasListToCommit()) {
       return null;
     }
@@ -159,7 +160,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
     } catch (AbfsRestOperationException ex) {
       if (shouldIngressHandlerBeSwitched(ex)) {
         LOG.error("Error in remote flush requiring handler switch for path {}", abfsOutputStream.getPath(), ex);
-        throw getIngressHandlerSwitchException(ex);
+        throw getIngressHandlerSwitchException(ex, (op != null && op.getResult() != null) ? op.getResult().getRequestId() : EMPTY_STRING);
       }
       LOG.error("Error in remote flush for path {} and offset {}", abfsOutputStream.getPath(), offset, ex);
       throw ex;

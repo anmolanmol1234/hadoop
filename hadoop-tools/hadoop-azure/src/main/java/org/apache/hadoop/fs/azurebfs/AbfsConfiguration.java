@@ -1466,12 +1466,13 @@ public class AbfsConfiguration{
    * Checks if the FixedSASTokenProvider is configured for the current account.
    *
    * @return true if the FixedSASTokenProvider is configured, false otherwise.
-   * @throws AzureBlobFileSystemException if there is an error in getting the SAS token provider.
    */
-  public boolean isFixedSASTokenProviderConfigured()
-      throws AzureBlobFileSystemException {
-    return getAuthType(this.accountName) == AuthType.SAS
-        && getSASTokenProvider() instanceof FixedSASTokenProvider;
+  public boolean isFixedSASTokenProviderConfigured() {
+    try {
+      return getSASTokenProvider() instanceof FixedSASTokenProvider;
+    } catch (AzureBlobFileSystemException e) {
+      return false;
+    }
   }
 
   private String getTrimmedPasswordString(String key, String defaultValue) throws IOException {

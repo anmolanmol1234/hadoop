@@ -594,6 +594,15 @@ public abstract class AbstractAbfsIntegrationTest extends
   }
 
   /**
+   * Returns the service type to be used for Ingress Operations irrespective of account type.
+   * Default value is the same as the service type configured for the file system.
+   * @return the service type.
+   */
+  public AbfsServiceType getIngressServiceType() {
+    return abfsConfig.getIngressServiceType();
+  }
+
+  /**
    * Create directory with implicit parent directory.
    * @param path path to create. Can be relative or absolute.
    */

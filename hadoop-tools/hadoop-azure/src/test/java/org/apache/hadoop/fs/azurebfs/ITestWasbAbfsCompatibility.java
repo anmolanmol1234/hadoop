@@ -30,6 +30,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.NativeAzureFileSystem;
+import org.apache.hadoop.fs.azurebfs.constants.AbfsServiceType;
 import org.apache.hadoop.fs.azurebfs.services.AbfsBlobClient;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
 
@@ -109,7 +110,7 @@ public class ITestWasbAbfsCompatibility extends AbstractAbfsIntegrationTest {
       final FileSystem readFs = readFileWithAbfs[i] ? abfs : wasb;
       if (createFs == abfs && readFs == wasb) {
         //Since flush changes the md5Hash value, md5 returned by GetBlobProperties will not match the one returned by GetBlob.
-        Assume.assumeFalse(abfs.getAbfsStore().getClientHandler().getIngressClient() instanceof AbfsBlobClient);
+        Assume.assumeFalse(getIngressServiceType() == AbfsServiceType.BLOB);
       }
 
       // Write

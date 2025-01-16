@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.fs.azurebfs;
 
+import org.apache.hadoop.fs.azurebfs.constants.AbfsServiceType;
 import org.apache.hadoop.fs.azurebfs.services.AbfsDfsClient;
 import org.apache.hadoop.util.Lists;
 
@@ -1043,7 +1044,7 @@ public class ITestAzureBlobFilesystemAcl extends AbstractAbfsIntegrationTest {
   public void testDefaultAclNewFile() throws Exception {
     final AzureBlobFileSystem fs = this.getFileSystem();
     assumeTrue(getIsNamespaceEnabled(fs));
-    Assume.assumeTrue(fs.getAbfsStore().getClientHandler().getIngressClient() instanceof AbfsDfsClient);
+    Assume.assumeTrue(getIngressServiceType() == AbfsServiceType.DFS);
     path = new Path(testRoot, UUID.randomUUID().toString());
     FileSystem.mkdirs(fs, path, FsPermission.createImmutable((short) RWX_RX));
     List<AclEntry> aclSpec = Lists.newArrayList(
@@ -1126,7 +1127,7 @@ public class ITestAzureBlobFilesystemAcl extends AbstractAbfsIntegrationTest {
   public void testOnlyAccessAclNewDir() throws Exception {
     final AzureBlobFileSystem fs = this.getFileSystem();
     assumeTrue(getIsNamespaceEnabled(fs));
-    Assume.assumeTrue(fs.getAbfsStore().getClientHandler().getIngressClient() instanceof AbfsDfsClient);
+    Assume.assumeTrue(getIngressServiceType() == AbfsServiceType.DFS);
     path = new Path(testRoot, UUID.randomUUID().toString());
     FileSystem.mkdirs(fs, path, FsPermission.createImmutable((short) RWX_RX));
     List<AclEntry> aclSpec = Lists.newArrayList(
@@ -1166,7 +1167,7 @@ public class ITestAzureBlobFilesystemAcl extends AbstractAbfsIntegrationTest {
   public void testDefaultAclNewFileWithMode() throws Exception {
     final AzureBlobFileSystem fs = this.getFileSystem();
     assumeTrue(getIsNamespaceEnabled(fs));
-    Assume.assumeTrue(fs.getAbfsStore().getClientHandler().getIngressClient() instanceof AbfsDfsClient);
+    Assume.assumeTrue(getIngressServiceType() == AbfsServiceType.DFS);
     path = new Path(testRoot, UUID.randomUUID().toString());
     FileSystem.mkdirs(fs, path, FsPermission.createImmutable((short) RWX_RX_RX));
     List<AclEntry> aclSpec = Lists.newArrayList(
@@ -1189,7 +1190,7 @@ public class ITestAzureBlobFilesystemAcl extends AbstractAbfsIntegrationTest {
   public void testDefaultAclNewDirWithMode() throws Exception {
     final AzureBlobFileSystem fs = this.getFileSystem();
     assumeTrue(getIsNamespaceEnabled(fs));
-    Assume.assumeTrue(fs.getAbfsStore().getClientHandler().getIngressClient() instanceof AbfsDfsClient);
+    Assume.assumeTrue(getIngressServiceType() == AbfsServiceType.DFS);
     path = new Path(testRoot, UUID.randomUUID().toString());
     FileSystem.mkdirs(fs, path, FsPermission.createImmutable((short) RWX_RX_RX));
     List<AclEntry> aclSpec = Lists.newArrayList(

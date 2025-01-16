@@ -58,5 +58,9 @@ public final class AbfsErrors {
       + "and cannot be appended to by the Azure Data Lake Storage Service API";
   public static final String CONDITION_NOT_MET = "The condition specified using "
       + "HTTP conditional header(s) is not met.";
+  /**
+   * Exception message on filesystem init if token-provider-auth-type configs are provided
+   */
+  public static final String UNAUTHORIZED_SAS = "Incorrect SAS token provider configured for non-hierarchical namespace account.";
   private AbfsErrors() {}
 }

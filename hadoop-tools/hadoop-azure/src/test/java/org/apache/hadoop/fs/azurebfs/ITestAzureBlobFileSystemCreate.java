@@ -695,7 +695,7 @@ public class ITestAzureBlobFileSystemCreate extends
   @Test
   public void testParentExplicitPathImplicit() throws Exception {
     final AzureBlobFileSystem fs = getFileSystem();
-    Assume.assumeTrue(fs.getAbfsStore().getClientHandler().getIngressClient() instanceof AbfsBlobClient);
+    Assume.assumeTrue(getIngressServiceType() == AbfsServiceType.BLOB);
     fs.mkdirs(new Path("/explicitParent"));
     String sourcePathName = "/explicitParent/implicitDir";
     Path sourcePath = new Path(sourcePathName);
@@ -721,8 +721,7 @@ public class ITestAzureBlobFileSystemCreate extends
   @Test
   public void testParentImplicitPathImplicit() throws Exception {
     final AzureBlobFileSystem fs = getFileSystem();
-    final AzureBlobFileSystemStore store = fs.getAbfsStore();
-    Assume.assumeTrue(fs.getAbfsStore().getClientHandler().getIngressClient() instanceof AbfsBlobClient);
+    Assume.assumeTrue(getIngressServiceType() == AbfsServiceType.BLOB);
     String parentPathName = "/implicitParent";
     Path parentPath = new Path(parentPathName);
     String sourcePathName = "/implicitParent/implicitDir";

@@ -485,11 +485,7 @@ public class ITestAzureBlobFileSystemAppend extends
     final AzureBlobFileSystem fs = getFileSystem();
     final Path filePath = path(TEST_FILE_PATH);
     fs.create(filePath);
-    AbfsClient abfsClient = fs.getAbfsStore()
-        .getClientHandler()
-        .getIngressClient();
-    Assume.assumeTrue("Skipping for DFS client",
-        abfsClient instanceof AbfsBlobClient);
+    Assume.assumeTrue(getIngressServiceType() == AbfsServiceType.BLOB);
     FSDataOutputStream outputStream = fs.append(filePath);
     outputStream.write(TEN);
     try (AzureBlobFileSystem fs1
@@ -657,11 +653,7 @@ public class ITestAzureBlobFileSystemAppend extends
     List<Future<?>> futures = new ArrayList<>();
 
     FSDataOutputStream out1 = fs.create(secondarytestfile);
-    AbfsClient abfsClient = fs.getAbfsStore()
-        .getClientHandler()
-        .getIngressClient();
-    Assume.assumeTrue("Skipping for DFS client",
-        abfsClient instanceof AbfsBlobClient);
+    Assume.assumeTrue(getIngressServiceType() == AbfsServiceType.BLOB);
     AbfsOutputStream outputStream1 = (AbfsOutputStream) out1.getWrappedStream();
     String fileETag = outputStream1.getIngressHandler().getETag();
     final byte[] b1 = new byte[8 * ONE_MB];
@@ -730,11 +722,7 @@ public class ITestAzureBlobFileSystemAppend extends
     final Path filePath = path(TEST_FILE_PATH);
     FSDataOutputStream out1 = fs.create(filePath);
     FSDataOutputStream out2 = fs.create(filePath);
-    AbfsClient abfsClient = fs.getAbfsStore()
-        .getClientHandler()
-        .getIngressClient();
-    Assume.assumeTrue("Skipping for DFS client",
-        abfsClient instanceof AbfsBlobClient);
+    Assume.assumeTrue(getIngressServiceType() == AbfsServiceType.BLOB);
     out2.write(TEN);
     out2.hsync();
     out1.write(TEN);
