@@ -20,7 +20,6 @@ package org.apache.hadoop.fs.azurebfs.contracts.exceptions;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
-import org.apache.hadoop.fs.azurebfs.services.AbfsHttpOperation;
 
 /**
  * Exception thrown when an invalid ingress service is encountered.

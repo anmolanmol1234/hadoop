@@ -224,7 +224,6 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
       LOG.error("Error in remote write requiring handler switch for path {}",
           abfsOutputStream.getPath(), ex);
       if (shouldIngressHandlerBeSwitched(ex)) {
-        // Extract the request ID if available
         throw getIngressHandlerSwitchException(ex);
       }
       LOG.error("Error in remote write for path {} and offset {}",
