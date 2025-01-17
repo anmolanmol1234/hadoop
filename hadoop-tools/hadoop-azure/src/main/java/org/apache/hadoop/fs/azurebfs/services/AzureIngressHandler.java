@@ -168,15 +168,15 @@ public abstract class AzureIngressHandler {
    * @return an InvalidIngressServiceException with the status code, error code, original message, and handler class name.
    */
   protected InvalidIngressServiceException getIngressHandlerSwitchException(
-      AbfsRestOperationException e, String requestId) {
+      AbfsRestOperationException e) {
     if (e.getMessage().contains(BLOB_OPERATION_NOT_SUPPORTED)) {
       return new InvalidIngressServiceException(e.getStatusCode(),
           AzureServiceErrorCode.BLOB_OPERATION_NOT_SUPPORTED.getErrorCode(),
-          BLOB_OPERATION_NOT_SUPPORTED + " " + getClass().getName(), e, requestId);
+          BLOB_OPERATION_NOT_SUPPORTED + " " + getClass().getName(), e);
     } else {
       return new InvalidIngressServiceException(e.getStatusCode(),
           AzureServiceErrorCode.INVALID_APPEND_OPERATION.getErrorCode(),
-          INVALID_APPEND_OPERATION + " " + getClass().getName(), e, requestId);
+          INVALID_APPEND_OPERATION + " " + getClass().getName(), e);
     }
   }
 

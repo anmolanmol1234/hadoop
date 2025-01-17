@@ -24,6 +24,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.junit.Assume;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,7 +85,6 @@ public final class AzcopyToolHelper {
   private static final ReentrantLock LOCK = new ReentrantLock();
 
   private AzcopyToolHelper() {
-
   }
 
   /**

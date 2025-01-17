@@ -20,6 +20,7 @@ package org.apache.hadoop.fs.azurebfs.contracts.exceptions;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
+import org.apache.hadoop.fs.azurebfs.services.AbfsHttpOperation;
 
 /**
  * Exception thrown when an invalid ingress service is encountered.
@@ -45,7 +46,7 @@ public final class InvalidIngressServiceException extends AbfsRestOperationExcep
   public InvalidIngressServiceException(final int statusCode,
       final String errorCode,
       final String errorMessage,
-      final Exception innerException, String activityId) {
-    super(statusCode, errorCode, errorMessage + ", rId: " + activityId, innerException);
+      final Exception innerException) {
+    super(statusCode, errorCode, errorMessage, innerException);
   }
 }

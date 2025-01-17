@@ -1177,11 +1177,6 @@ public class ITestAzureBlobFileSystemCreate extends
    * And the directory to be created existing as explicit directory
    * @throws Exception
    */
-  /**
-   * Creation of directory with parent directory existing as implicit.
-   * And the directory to be created existing as explicit directory
-   * @throws Exception
-   */
   @Test
   public void testMkdirOnExistingExplicitDirWithImplicitParentDir() throws Exception {
     final AzureBlobFileSystem fs = getFileSystem();

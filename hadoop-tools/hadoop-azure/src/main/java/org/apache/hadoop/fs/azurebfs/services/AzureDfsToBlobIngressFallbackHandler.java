@@ -109,7 +109,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
       DataBlocks.BlockUploadData uploadData,
       AppendRequestParameters reqParams,
       TracingContext tracingContext) throws IOException {
-    AbfsRestOperation op = null;
+    AbfsRestOperation op;
     TracingContext tracingContextAppend = new TracingContext(tracingContext);
     String threadIdStr = String.valueOf(Thread.currentThread().getId());
     tracingContextAppend.setIngressHandler(FALLBACK_APPEND + " T " + threadIdStr);
@@ -121,7 +121,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
     } catch (AbfsRestOperationException ex) {
       if (shouldIngressHandlerBeSwitched(ex)) {
         LOG.error("Error in remote write requiring handler switch for path {}", abfsOutputStream.getPath(), ex);
-        throw getIngressHandlerSwitchException(ex, (op != null && op.getResult() != null) ? op.getResult().getRequestId() : EMPTY_STRING);
+        throw getIngressHandlerSwitchException(ex);
       }
       LOG.error("Error in remote write for path {} and offset {}", abfsOutputStream.getPath(),
           blockToUpload.getOffset(), ex);
@@ -147,7 +147,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
       final boolean isClose,
       final String leaseId,
       TracingContext tracingContext) throws IOException {
-    AbfsRestOperation op = null;
+    AbfsRestOperation op;
     if (!blobBlockManager.hasListToCommit()) {
       return null;
     }
@@ -160,7 +160,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
     } catch (AbfsRestOperationException ex) {
       if (shouldIngressHandlerBeSwitched(ex)) {
         LOG.error("Error in remote flush requiring handler switch for path {}", abfsOutputStream.getPath(), ex);
-        throw getIngressHandlerSwitchException(ex, (op != null && op.getResult() != null) ? op.getResult().getRequestId() : EMPTY_STRING);
+        throw getIngressHandlerSwitchException(ex);
       }
       LOG.error("Error in remote flush for path {} and offset {}", abfsOutputStream.getPath(), offset, ex);
       throw ex;
