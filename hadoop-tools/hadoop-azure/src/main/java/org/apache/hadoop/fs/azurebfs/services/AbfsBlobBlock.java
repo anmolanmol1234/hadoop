@@ -47,7 +47,7 @@ public class AbfsBlobBlock extends AbfsBlock {
    * @return String representing the block ID generated.
    */
   private String generateBlockId(long position) {
-    String streamId = this.outputStream.getStreamID();
+    String streamId = getOutputStream().getStreamID();
     String streamIdHash = Integer.toString(streamId.hashCode());
     String blockId = String.format("%d_%s", position, streamIdHash);
     byte[] blockIdByteArray = new byte[BLOCK_ID_LENGTH];

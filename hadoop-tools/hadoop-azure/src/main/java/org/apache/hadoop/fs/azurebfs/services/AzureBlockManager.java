@@ -98,7 +98,7 @@ public abstract class AzureBlockManager {
    *
    * @param activeBlock the block to set as active
    */
-  public void setActiveBlock(final AbfsBlock activeBlock) {
+  public synchronized void setActiveBlock(final AbfsBlock activeBlock) {
     this.activeBlock = activeBlock;
   }
 

@@ -29,7 +29,7 @@ import org.apache.hadoop.fs.store.DataBlocks;
 public class AbfsBlock implements Closeable {
 
   private final DataBlocks.DataBlock activeBlock;
-  protected AbfsOutputStream outputStream;
+  private AbfsOutputStream outputStream;
   private final long offset;
   private BlockEntry blockEntry;
 
@@ -47,14 +47,6 @@ public class AbfsBlock implements Closeable {
     int blockSize = outputStream.getBlockManager().getBlockSize();
     AbfsOutputStreamStatistics outputStreamStatistics = outputStream.getOutputStreamStatistics();
     this.activeBlock = blockFactory.create(blockCount, blockSize, outputStreamStatistics);
-  }
-
-  /**
-   * Returns activeBlock.
-   * @return activeBlock.
-   */
-  public DataBlocks.DataBlock getActiveBlock() {
-    return activeBlock;
   }
 
   /**

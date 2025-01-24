@@ -49,7 +49,7 @@ public abstract class AzureIngressHandler {
       AbfsOutputStream.class);
 
   /** The output stream associated with this handler */
-  protected AbfsOutputStream abfsOutputStream;
+  private AbfsOutputStream abfsOutputStream;
 
   /**
    * Constructs an AzureIngressHandler.
@@ -57,6 +57,24 @@ public abstract class AzureIngressHandler {
    * @param abfsOutputStream the output stream associated with this handler
    */
   protected AzureIngressHandler(AbfsOutputStream abfsOutputStream) {
+    this.abfsOutputStream = abfsOutputStream;
+  }
+
+  /**
+   * Gets the AbfsOutputStream associated with this handler.
+   *
+   * @return the AbfsOutputStream
+   */
+  public AbfsOutputStream getAbfsOutputStream() {
+    return abfsOutputStream;
+  }
+
+  /**
+   * Sets the AbfsOutputStream associated with this handler.
+   *
+   * @param abfsOutputStream the AbfsOutputStream to set
+   */
+  public void setAbfsOutputStream(final AbfsOutputStream abfsOutputStream) {
     this.abfsOutputStream = abfsOutputStream;
   }
 
@@ -193,21 +211,4 @@ public abstract class AzureIngressHandler {
    * @return the block manager
    */
   public abstract AbfsClient getClient();
-
-  /**
-   * Generates an XML string representing the block list.
-   *
-   * @param blockIds the set of block IDs
-   * @return the generated XML string
-   */
-  public static String generateBlockListXml(List<String> blockIds) {
-    StringBuilder stringBuilder = new StringBuilder();
-    stringBuilder.append(String.format(XML_VERSION));
-    stringBuilder.append(String.format(BLOCK_LIST_START_TAG));
-    for (String blockId : blockIds) {
-      stringBuilder.append(String.format(LATEST_BLOCK_FORMAT, blockId));
-    }
-    stringBuilder.append(String.format(BLOCK_LIST_END_TAG));
-    return stringBuilder.toString();
-  }
 }
