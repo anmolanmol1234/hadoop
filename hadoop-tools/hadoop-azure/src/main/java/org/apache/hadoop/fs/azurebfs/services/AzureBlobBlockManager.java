@@ -76,12 +76,13 @@ public class AzureBlobBlockManager extends AzureBlockManager {
   @Override
   protected synchronized AbfsBlock createBlockInternal(long position)
       throws IOException {
-    if (activeBlock == null) {
-      blockCount++;
-      activeBlock = new AbfsBlobBlock(abfsOutputStream, position);
+    if (getActiveBlock() == null) {
+      setBlockCount(getBlockCount() + 1);
+      AbfsBlock activeBlock = new AbfsBlobBlock(getAbfsOutputStream(), position);
       activeBlock.setBlockEntry(addNewEntry(activeBlock.getBlockId(), activeBlock.getOffset()));
+      setActiveBlock(activeBlock);
     }
-    return activeBlock;
+    return getActiveBlock();
   }
 
   /**
@@ -94,9 +95,9 @@ public class AzureBlobBlockManager extends AzureBlockManager {
   private List<String> getBlockList(TracingContext tracingContext)
       throws AzureBlobFileSystemException {
     List<String> committedBlockIdList = new ArrayList<>();
-    AbfsBlobClient blobClient = abfsOutputStream.getClientHandler().getBlobClient();
+    AbfsBlobClient blobClient = getAbfsOutputStream().getClientHandler().getBlobClient();
     final AbfsRestOperation op = blobClient
-        .getBlockList(abfsOutputStream.getPath(), tracingContext);
+        .getBlockList(getAbfsOutputStream().getPath(), tracingContext);
     if (op != null && op.getResult() != null) {
       committedBlockIdList = op.getResult().getBlockIdList();
     }
@@ -118,7 +119,7 @@ public class AzureBlobBlockManager extends AzureBlockManager {
       BlockEntry lastEntry = blockEntryList.getLast();
       if (position <= lastEntry.getPosition()) {
         throw new IOException("New block position " + position  + " must be greater than the last block position "
-            + lastEntry.getPosition() + " for path " + abfsOutputStream.getPath());
+            + lastEntry.getPosition() + " for path " + getAbfsOutputStream().getPath());
       }
     }
     BlockEntry blockEntry = new BlockEntry(blockId, position, AbfsBlockStatus.NEW);
@@ -158,7 +159,7 @@ public class AzureBlobBlockManager extends AzureBlockManager {
             current.getBlockId(), current.getPosition(), current.getStatus());
         throw new IOException("Flush failed. Block " + current.getBlockId()
             + " with position " + current.getPosition() + " has status "
-            + current.getStatus() + "for path " + abfsOutputStream.getPath());
+            + current.getStatus() + "for path " + getAbfsOutputStream().getPath());
       }
       if (!blockEntryList.isEmpty()) {
         BlockEntry next = blockEntryList.getFirst();
@@ -169,8 +170,8 @@ public class AzureBlobBlockManager extends AzureBlockManager {
                   + "Block ID: " + current.getBlockId()
                   + ", Position: " + current.getPosition()
                   + ", Status: " + current.getStatus()
-                  + ", Path: " + abfsOutputStream.getPath()
-                  + ", StreamID: " + abfsOutputStream.getStreamID()
+                  + ", Path: " + getAbfsOutputStream().getPath()
+                  + ", StreamID: " + getAbfsOutputStream().getStreamID()
                   + ", Next block position: " + next.getPosition()
                   + "\n";
           throw new IOException(errorMessage);

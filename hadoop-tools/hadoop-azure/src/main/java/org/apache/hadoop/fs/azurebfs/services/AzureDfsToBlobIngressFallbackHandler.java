@@ -35,7 +35,6 @@ import org.apache.hadoop.fs.store.DataBlocks;
 import org.apache.hadoop.io.IOUtils;
 
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPEND_ACTION;
-import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.EMPTY_STRING;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.FALLBACK_APPEND;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.FALLBACK_FLUSH;
 
@@ -49,7 +48,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
 
   private final AzureBlobBlockManager blobBlockManager;
 
-  private String eTag;
+  private final String eTag;
 
   private final Lock lock = new ReentrantLock();
 

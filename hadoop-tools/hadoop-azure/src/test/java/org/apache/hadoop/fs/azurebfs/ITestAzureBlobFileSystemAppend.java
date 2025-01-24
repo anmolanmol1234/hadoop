@@ -830,7 +830,9 @@ public class ITestAzureBlobFileSystemAppend extends
         AbfsOutputStream os = (AbfsOutputStream) createMockedOutputStream(fs,
             new Path("/test/file/file4"), blobClient).getWrappedStream();
         os.write(bytes);
-        while (!os.areWriteOperationsTasksDone()) ;
+        while (!os.areWriteOperationsTasksDone()) {
+          // No operation inside the loop
+        }
         os.write(bytes);
       });
     }
@@ -897,7 +899,9 @@ public class ITestAzureBlobFileSystemAppend extends
 
       Mockito.doAnswer(answer -> {
             count.incrementAndGet();
-            while (count.get() < 2) ;
+            while (count.get() < 2) {
+              // No operation inside the loop
+            }
             Thread.sleep(10 * HUNDRED);
             throw new AbfsRestOperationException(HTTP_UNAVAILABLE, "", "",
                 new Exception());
@@ -909,7 +913,9 @@ public class ITestAzureBlobFileSystemAppend extends
 
       Mockito.doAnswer(answer -> {
             count.incrementAndGet();
-            while (count.get() < 2) ;
+            while (count.get() < 2) {
+              // No operation inside the loop
+            }
             Thread.sleep(10 * HUNDRED);
             throw new AbfsRestOperationException(HTTP_UNAVAILABLE, "", "",
                 new Exception());

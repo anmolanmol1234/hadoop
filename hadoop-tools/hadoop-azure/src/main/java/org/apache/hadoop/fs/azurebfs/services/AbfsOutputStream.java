@@ -227,6 +227,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
    * time spent in the critical section.
    * If the `ingressHandler` is `null`, the handler is safely initialized outside of the lock as no other
    * thread would be modifying it.
+   * </p>
    *
    * @param serviceType   The type of Azure service to handle (e.g., ABFS, Blob, etc.).
    * @param blockFactory  The factory to create data blocks used in the handler.

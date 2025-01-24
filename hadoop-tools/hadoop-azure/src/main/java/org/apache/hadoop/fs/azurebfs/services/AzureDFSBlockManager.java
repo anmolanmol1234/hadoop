@@ -59,11 +59,12 @@ public class AzureDFSBlockManager extends AzureBlockManager {
   @Override
   protected synchronized AbfsBlock createBlockInternal(long position)
       throws IOException {
-    if (activeBlock == null) {
-      blockCount++;
-      activeBlock = new AbfsBlock(abfsOutputStream, position);
+    if (getActiveBlock() == null) {
+      setBlockCount(getBlockCount() + 1);
+      AbfsBlock activeBlock = new AbfsBlock(getAbfsOutputStream(), position);
+      setActiveBlock(activeBlock);
     }
-    return activeBlock;
+    return getActiveBlock();
   }
 
   /**

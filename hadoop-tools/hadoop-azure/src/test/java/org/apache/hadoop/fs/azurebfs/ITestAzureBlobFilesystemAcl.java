@@ -19,7 +19,6 @@
 package org.apache.hadoop.fs.azurebfs;
 
 import org.apache.hadoop.fs.azurebfs.constants.AbfsServiceType;
-import org.apache.hadoop.fs.azurebfs.services.AbfsDfsClient;
 import org.apache.hadoop.util.Lists;
 
 import java.io.FileNotFoundException;

@@ -37,15 +37,15 @@ public abstract class AzureBlockManager {
   private final DataBlocks.BlockFactory blockFactory;
 
   /** Current data block. Null means none currently active. */
-  protected AbfsBlock activeBlock;
+  private AbfsBlock activeBlock;
 
   /** Count of blocks uploaded. */
-  protected long blockCount = 0;
+  private long blockCount = 0;
 
   /** The size of a single block. */
-  protected final int blockSize;
+  private final int blockSize;
 
-  protected AbfsOutputStream abfsOutputStream;
+  private AbfsOutputStream abfsOutputStream;
 
   /**
    * Constructs an AzureBlockManager.
@@ -94,6 +94,15 @@ public abstract class AzureBlockManager {
   }
 
   /**
+   * Sets the active block.
+   *
+   * @param activeBlock the block to set as active
+   */
+  public void setActiveBlock(final AbfsBlock activeBlock) {
+    this.activeBlock = activeBlock;
+  }
+
+  /**
    * Checks if there is an active block.
    *
    * @return true if there is an active block, false otherwise
@@ -121,12 +130,30 @@ public abstract class AzureBlockManager {
   }
 
   /**
+   * Sets the count of blocks uploaded.
+   *
+   * @param blockCount the count of blocks to set
+   */
+  public void setBlockCount(final long blockCount) {
+    this.blockCount = blockCount;
+  }
+
+  /**
    * Gets the block size.
    *
    * @return the block size
    */
   protected int getBlockSize() {
     return blockSize;
+  }
+
+  /**
+   * Gets the AbfsOutputStream associated with this block manager.
+   *
+   * @return the AbfsOutputStream
+   */
+  protected AbfsOutputStream getAbfsOutputStream() {
+    return abfsOutputStream;
   }
 
   /**
