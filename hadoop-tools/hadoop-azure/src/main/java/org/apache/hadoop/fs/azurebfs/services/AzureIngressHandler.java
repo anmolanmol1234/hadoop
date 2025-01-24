@@ -19,7 +19,6 @@
 package org.apache.hadoop.fs.azurebfs.services;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Objects;
 
 import org.slf4j.Logger;
