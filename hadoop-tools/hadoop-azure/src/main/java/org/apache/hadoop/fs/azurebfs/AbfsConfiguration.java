@@ -1471,6 +1471,7 @@ public class AbfsConfiguration{
     try {
       return getSASTokenProvider() instanceof FixedSASTokenProvider;
     } catch (AzureBlobFileSystemException e) {
+      LOG.debug("Failed to get SAS token provider", e);
       return false;
     }
   }

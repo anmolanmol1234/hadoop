@@ -313,12 +313,12 @@ public final class AbfsHttpConstants {
   public static final String APACHE_IMPL = "Apache";
   public static final String JDK_FALLBACK = "JDK_fallback";
   public static final String KEEP_ALIVE_CACHE_CLOSED = "KeepAliveCache is closed";
-  public static final String DFS_FLUSH = "DFlush";
-  public static final String DFS_APPEND = "DAppend";
-  public static final String BLOB_FLUSH = "BFlush";
-  public static final String BLOB_APPEND = "BAppend";
-  public static final String FALLBACK_FLUSH = "FBFlush";
-  public static final String FALLBACK_APPEND = "FBAppend";
+  public static final String DFS_FLUSH = "D";
+  public static final String DFS_APPEND = "D";
+  public static final String BLOB_FLUSH = "B";
+  public static final String BLOB_APPEND = "B";
+  public static final String FALLBACK_FLUSH = "FB";
+  public static final String FALLBACK_APPEND = "FB";
 
   private AbfsHttpConstants() {}
 }

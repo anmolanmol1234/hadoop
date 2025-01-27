@@ -25,6 +25,12 @@ import org.apache.commons.codec.binary.Base64;
 
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.BLOCK_ID_LENGTH;
 
+/**
+ * Represents a block in Azure Blob Storage used by Azure Data Lake Storage (ADLS).
+ *
+ * <p>Extends {@link AbfsBlock} and provides functionality specific to Azure Blob Storage blocks.
+ * Each block is identified by a unique block ID generated based on the offset and stream ID.</p>
+ */
 public class AbfsBlobBlock extends AbfsBlock {
 
   private final String blockId;

@@ -430,6 +430,7 @@ public class AbfsBlobClient extends AbfsClient {
         if (ex.getStatusCode() == HTTP_NOT_FOUND) {
           LOG.debug("No directory/path found: {}", path);
         } else {
+          LOG.debug("Failed to get path status for: {}", path, ex);
           throw ex;
         }
       }
@@ -488,6 +489,7 @@ public class AbfsBlobClient extends AbfsClient {
           opResult = this.getPathStatus(path, true, tracingContext, null).getResult();
         } catch (AbfsRestOperationException e) {
           if (opResult != null) {
+            LOG.debug("Failed to get path status for: {} during blob type check", path, e);
             throw e;
           }
         }
@@ -537,40 +539,20 @@ public class AbfsBlobClient extends AbfsClient {
   private void checkParentChainForFile(Path path, TracingContext tracingContext,
       List<Path> keysToCreateAsFolder) throws AzureBlobFileSystemException {
     AbfsHttpOperation opResult = null;
-    try {
-      opResult = getPathStatus(path.toUri().getPath(),
-          tracingContext, null, false).getResult();
-    } catch (AbfsRestOperationException ex) {
-      if (ex.getStatusCode() == HTTP_NOT_FOUND) {
-        LOG.debug("No explicit directory/path found: {}", path);
-      } else {
-        throw ex;
-      }
-    }
-    boolean isDirectory = opResult != null && checkIsDir(opResult);
-    if (opResult != null && !isDirectory) {
-      throw new AbfsRestOperationException(HTTP_CONFLICT,
-          AzureServiceErrorCode.PATH_CONFLICT.getErrorCode(),
-          PATH_EXISTS,
-          null);
-    }
-    if (isDirectory) {
-      return;
-    }
-    keysToCreateAsFolder.add(path);
-    Path current = path.getParent();
-    while (current != null && !current.isRoot()) {
+    Path current = path;
+    do {
       try {
         opResult = getPathStatus(current.toUri().getPath(),
             tracingContext, null, false).getResult();
       } catch (AbfsRestOperationException ex) {
         if (ex.getStatusCode() == HTTP_NOT_FOUND) {
-          LOG.debug("No explicit directory/path found: {}", path);
+          LOG.debug("No explicit directory/path found: {}", current);
         } else {
+          LOG.debug("Exception occurred while getting path status: {}", current, ex);
           throw ex;
         }
       }
-      isDirectory = opResult != null && checkIsDir(opResult);
+      boolean isDirectory = opResult != null && checkIsDir(opResult);
       if (opResult != null && !isDirectory) {
         throw new AbfsRestOperationException(HTTP_CONFLICT,
             AzureServiceErrorCode.PATH_CONFLICT.getErrorCode(),
@@ -582,7 +564,7 @@ public class AbfsBlobClient extends AbfsClient {
       }
       keysToCreateAsFolder.add(current);
       current = current.getParent();
-    }
+    } while (current != null && !current.isRoot());
   }
 
   /**
@@ -857,6 +839,7 @@ public class AbfsBlobClient extends AbfsClient {
     try {
       op.execute(tracingContext);
     } catch (AzureBlobFileSystemException ex) {
+      LOG.debug("Exception occurred during append block operation for path: {}", path, ex);
       // If we have no HTTP response, throw the original exception.
       if (!op.hasResult()) {
         throw ex;

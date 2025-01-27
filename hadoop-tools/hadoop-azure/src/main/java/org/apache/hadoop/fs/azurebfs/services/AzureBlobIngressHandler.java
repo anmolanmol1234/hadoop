@@ -239,7 +239,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
    *
    * @param eTag the eTag to set.
    */
-  synchronized void setETag(String eTag) {
+  void setETag(String eTag) {
     this.eTag = eTag;
   }
 
@@ -250,7 +250,7 @@ public class AzureBlobIngressHandler extends AzureIngressHandler {
    */
   @VisibleForTesting
   @Override
-  public synchronized String getETag() {
+  public String getETag() {
     return eTag;
   }
 
