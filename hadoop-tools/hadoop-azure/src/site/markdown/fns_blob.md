@@ -80,3 +80,29 @@ configured service type.
         <value>BLOB</value>
     </property>
     ```
+
+5. Auth type supported over FNS Blob: SharedKey, OAuth and fixed SAS.
+    ```xml
+   <property>
+        <name>fs.azure.account.auth.type</name>
+        <value>SharedKey</value>
+    </property>
+    ``` 
+   How to configure Shared Key
+   auth: [Shared Key](./abfs.md#a-nameshared-key-autha-default-shared-key)   
+   How to configure
+   OAuth: [OAuth](./abfs.md#a-nameoauth-client-credentialsa-oauth-20-client-credentials)                   
+   How to configure fixed
+   SAS: [Fixed SAS](./abfs.md#using-accountservice-sas-with-abfs)
+
+### <a name="renamedeleteoptions"></a> Rename delete configs
+
+The following configs are related to rename and delete operations.
+
+`fs.azure.blob.copy.progress.wait.millis`: Blob copy API is an async API, this
+configuration defines polling duration for checking copy status. The default
+value is 1 sec i.e. 1000 ms.
+
+`fs.azure.blob.copy.max.wait.millis`: Maximum time to wait for a blob copy operation to complete. The default value is 5 minutes.
+
+
