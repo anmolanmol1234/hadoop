@@ -428,6 +428,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
       throw new PathIOException(path, ERR_WRITE_WITHOUT_LEASE);
     }
     if (length == 0) {
+      LOG.debug("No data to write, length is 0 for path: {}", path);
       return;
     }
 
@@ -535,6 +536,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
             try {
               op = remoteWrite(blockToUpload, blockUploadData, reqParams, tracingContext);
             } catch (InvalidIngressServiceException ex) {
+              LOG.debug("InvalidIngressServiceException caught for path: {}, switching handler and retrying remoteWrite.", getPath());
               switchHandler();
               // retry the operation with switched handler.
               op = remoteWrite(blockToUpload, blockUploadData, reqParams, tracingContext);
@@ -862,6 +864,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
         op = remoteFlush(offset, retainUncommitedData, isClose, leaseId,
             tracingContext);
       } catch (InvalidIngressServiceException ex) {
+        LOG.debug("InvalidIngressServiceException caught for path: {}, switching handler and retrying remoteFlush.", getPath());
         // If an invalid ingress service is encountered, switch handler and retry.
         switchHandler();
         op = remoteFlush(offset, retainUncommitedData, isClose, leaseId,

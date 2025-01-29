@@ -239,6 +239,7 @@ public class AzureDfsToBlobIngressFallbackHandler extends AzureDFSIngressHandler
             activeBlock, reqParams,
             new TracingContext(getAbfsOutputStream().getTracingContext()));
       } catch (InvalidIngressServiceException ex) {
+        LOG.debug("InvalidIngressServiceException caught for path: {}, switching handler and retrying remoteAppendBlobWrite.", getAbfsOutputStream().getPath());
         getAbfsOutputStream().switchHandler();
         op = getAbfsOutputStream().getIngressHandler()
             .remoteAppendBlobWrite(getAbfsOutputStream().getPath(), uploadData,
