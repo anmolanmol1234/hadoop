@@ -50,7 +50,6 @@ import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.azurebfs.Abfs;
 import org.apache.hadoop.fs.azurebfs.AbfsConfiguration;
 import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystemStore;
 import org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants;
@@ -1500,7 +1499,7 @@ public class AbfsBlobClient extends AbfsClient {
   public boolean checkUserError(int responseStatusCode) {
     return (responseStatusCode >= HttpURLConnection.HTTP_BAD_REQUEST
         && responseStatusCode < HttpURLConnection.HTTP_INTERNAL_ERROR
-        && responseStatusCode != HTTP_CONFLICT);
+        && responseStatusCode != HttpURLConnection.HTTP_CONFLICT);
   }
 
   /**
@@ -1784,6 +1783,7 @@ public class AbfsBlobClient extends AbfsClient {
     entrySchema.setLastModifiedTime(
         pathStatus.getResult().getResponseHeader(LAST_MODIFIED));
     entrySchema.setETag(extractEtagHeader(pathStatus.getResult()));
+    entrySchema.setETag(AzureBlobFileSystemStore.extractEtagHeader(pathStatus.getResult()));
 
     // If listing is done on explicit directory, do not include directory in the listing.
     if (!entrySchema.isDirectory()) {
@@ -1801,7 +1801,7 @@ public class AbfsBlobClient extends AbfsClient {
   private static String decodeMetadataAttribute(String encoded)
       throws UnsupportedEncodingException {
     return encoded == null ? null
-        : URLDecoder.decode(encoded, StandardCharsets.UTF_8.name());
+        : java.net.URLDecoder.decode(encoded, StandardCharsets.UTF_8.name());
   }
 
   private boolean isNonEmptyListing(String path,

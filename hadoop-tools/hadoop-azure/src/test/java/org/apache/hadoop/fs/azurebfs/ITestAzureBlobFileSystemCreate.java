@@ -606,8 +606,6 @@ public class ITestAzureBlobFileSystemCreate extends
   }
 
   /**
-<<<<<<< HEAD
-=======
    * Calling mkdir for existing implicit directory.
    * @throws Exception
    */
@@ -619,7 +617,6 @@ public class ITestAzureBlobFileSystemCreate extends
   }
 
   /**
->>>>>>> 0a3d699cb9b554bbbf3e4152328ef076761897a0
    * Try creating file same as an existing directory.
    * @throws Exception
    */
