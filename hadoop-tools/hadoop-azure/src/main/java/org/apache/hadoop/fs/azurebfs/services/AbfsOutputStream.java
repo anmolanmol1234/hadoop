@@ -296,6 +296,9 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
    */
   protected void switchHandler() throws IOException {
     if (serviceTypeAtInit != currentExecutingServiceType) {
+      LOG.debug("Handler switch not required as serviceTypeAtInit {} is different from currentExecutingServiceType {}. "
+              + "This check prevents the handler from being switched more than once.",
+          serviceTypeAtInit, currentExecutingServiceType);
       return;
     }
     if (serviceTypeAtInit == AbfsServiceType.BLOB) {
@@ -303,6 +306,7 @@ public class AbfsOutputStream extends OutputStream implements Syncable,
     } else {
       currentExecutingServiceType = AbfsServiceType.BLOB;
     }
+    LOG.info("Switching ingress handler to different service type: {}", currentExecutingServiceType);
     ingressHandler = createIngressHandler(currentExecutingServiceType,
         blockFactory, bufferSize, true, getBlockManager());
   }
