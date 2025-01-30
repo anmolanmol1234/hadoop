@@ -606,6 +606,17 @@ public class ITestAzureBlobFileSystemCreate extends
   }
 
   /**
+   * Calling mkdir for existing implicit directory.
+   * @throws Exception
+   */
+  @Test
+  public void testMkdirSameFolder() throws Exception {
+    final AzureBlobFileSystem fs = getFileSystem();
+    createAzCopyFolder(new Path("a/b/d"));
+    fs.mkdirs(new Path("a/b/d"));
+  }
+
+  /**
    * Try creating file same as an existing directory.
    * @throws Exception
    */
@@ -1231,9 +1242,9 @@ public class ITestAzureBlobFileSystemCreate extends
         .isTrue();
 
     // Asserting that the directory created by mkdir exists as explicit.
-    Assertions.assertThat(DirectoryStateHelper.isExplicitDirectory(path,
+    Assertions.assertThat(DirectoryStateHelper.isImplicitDirectory(path,
             fs, getTestTracingContext(fs, true)))
-        .describedAs("Directory created by mkdir does not exist as explicit")
+        .describedAs("Mkdir created explicit directory")
         .isTrue();
   }
 
@@ -1257,15 +1268,15 @@ public class ITestAzureBlobFileSystemCreate extends
     fs.mkdirs(path);
 
     // Asserting that path created by azcopy becomes explicit.
-    Assertions.assertThat(DirectoryStateHelper.isExplicitDirectory(implicitPath,
+    Assertions.assertThat(DirectoryStateHelper.isImplicitDirectory(implicitPath,
             fs, getTestTracingContext(fs, true)))
-        .describedAs("Path created by azcopy did not become explicit")
+        .describedAs("Marker is present for path created by azcopy")
         .isTrue();
 
-    // Asserting that the directory created by mkdir exists as explicit.
-    Assertions.assertThat(DirectoryStateHelper.isExplicitDirectory(path,
+    // Asserting that the mkdir didn't create markers for existing directory.
+    Assertions.assertThat(DirectoryStateHelper.isImplicitDirectory(path,
             fs, getTestTracingContext(fs, true)))
-        .describedAs("Directory created by mkdir does not exist as explicit")
+        .describedAs("Marker is present for existing directory")
         .isTrue();
   }
 

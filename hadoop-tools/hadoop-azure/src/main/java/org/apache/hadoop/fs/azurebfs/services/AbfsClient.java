@@ -44,6 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.VisibleForTesting;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants;
 import org.apache.hadoop.fs.azurebfs.constants.HttpOperationType;
 import org.apache.hadoop.fs.azurebfs.constants.FSOperationType;
@@ -549,6 +550,26 @@ public abstract class AbfsClient implements Closeable {
       String eTag,
       ContextEncryptionAdapter contextEncryptionAdapter,
       TracingContext tracingContext) throws AzureBlobFileSystemException;
+
+  /**
+   * Conditionally creates or overwrites a file at the specified relative path.
+   * This method ensures that the file is created or overwritten based on the provided parameters.
+   *
+   * @param relativePath The relative path of the file to be created or overwritten.
+   * @param statistics The file system statistics to be updated.
+   * @param permissions The permissions to be set on the file.
+   * @param isAppendBlob Specifies if the file is an append blob.
+   * @param contextEncryptionAdapter The encryption context adapter for handling encryption.
+   * @param tracingContext The tracing context for tracking the operation.
+   * @return An AbfsRestOperation object containing the result of the operation.
+   * @throws IOException If an I/O error occurs during the operation.
+   */
+  public abstract AbfsRestOperation conditionalCreateOverwriteFile(final String relativePath,
+      final FileSystem.Statistics statistics,
+      final Permissions permissions,
+      final boolean isAppendBlob,
+      final ContextEncryptionAdapter contextEncryptionAdapter,
+      final TracingContext tracingContext) throws IOException;
 
   /**
    * Acquire lease on specified path.
