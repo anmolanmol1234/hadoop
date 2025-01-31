@@ -18,8 +18,6 @@
 
 package org.apache.hadoop.fs.azurebfs.contracts.exceptions;
 
-import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AbfsRestOperationException;
-
 /**
  * Exception to be thrown when there is a path conflict, with additional information
  * about whether the conflicting path is a directory.

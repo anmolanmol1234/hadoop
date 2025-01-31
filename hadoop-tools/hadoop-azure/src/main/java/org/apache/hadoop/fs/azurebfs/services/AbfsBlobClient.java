@@ -428,7 +428,7 @@ public class AbfsBlobClient extends AbfsClient {
     if (!getIsNamespaceEnabled() && !skipMarkerCreation) {
       AbfsRestOperation listPathOp = listPath(path, false, 1, null,
           tracingContext, false);
-      AbfsHttpOperation listPathResult = listPathOp != null ? listPathOp.getResult() : null;
+      AbfsHttpOperation listPathResult = listPathOp.getResult();
       if (listPathResult != null) {
         // Determine if the path is a directory by checking if the list result schema has any paths
         boolean isDir = !listPathResult.getListResultSchema().paths().isEmpty();
@@ -438,7 +438,11 @@ public class AbfsBlobClient extends AbfsClient {
 
         // If the path is already a  directory, and we are doing a mkdir again, just return.
         if (!isFile && isDir) {
-          return listPathOp;
+          final AbfsRestOperation successOp = getAbfsRestOperation(
+              AbfsRestOperationType.PutBlob,
+              HTTP_METHOD_PUT, listPathOp.getUrl(), requestHeaders);
+          successOp.hardSetResult(HttpURLConnection.HTTP_OK);
+          return successOp;
         } else if (!isFile) {
           try {
             AbfsRestOperation directoryOp = checkDirectoryPathExists(path, tracingContext);
@@ -525,7 +529,12 @@ public class AbfsBlobClient extends AbfsClient {
       // If path exists and is a directory, return.
       boolean isDirectory = checkIsDir(getPathStatusOp.getResult());
       if (isDirectory) {
-        return getPathStatusOp;
+        final AbfsRestOperation successOp = getAbfsRestOperation(
+            AbfsRestOperationType.PutBlob,
+            HTTP_METHOD_PUT, getPathStatusOp.getUrl(),
+            getPathStatusOp.getRequestHeaders());
+        successOp.hardSetResult(HttpURLConnection.HTTP_OK);
+        return successOp;
       } else {
         // This indicates path exists as a file, hence throw conflict.
         throw new AbfsRestOperationException(HTTP_CONFLICT,
@@ -615,12 +624,12 @@ public class AbfsBlobClient extends AbfsClient {
    * @return An AbfsRestOperation object containing the result of the operation.
    * @throws IOException If an I/O error occurs during the operation.
    */
-  public AbfsRestOperation conditionalCreateOverwriteFile(final String relativePath,
-      final FileSystem.Statistics statistics,
-      final AzureBlobFileSystemStore.Permissions permissions,
-      final boolean isAppendBlob,
-      final ContextEncryptionAdapter contextEncryptionAdapter,
-      final TracingContext tracingContext) throws IOException {
+  public AbfsRestOperation conditionalCreateOverwriteFile(String relativePath,
+      FileSystem.Statistics statistics,
+      AzureBlobFileSystemStore.Permissions permissions,
+      boolean isAppendBlob,
+      ContextEncryptionAdapter contextEncryptionAdapter,
+      TracingContext tracingContext) throws IOException {
     AbfsRestOperation op = null;
     try {
       // Trigger a create with overwrite=false first so that eTag fetch can be
