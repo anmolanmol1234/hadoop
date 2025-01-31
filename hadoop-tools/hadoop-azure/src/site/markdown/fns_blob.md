@@ -85,7 +85,7 @@ configured service type.
         <name>fs.azure.account.auth.type</name>
         <value>SharedKey</value>
     </property>
-    ``` 
+    ```
     - How to configure Shared Key
       auth: [Shared Key](./abfs.md#a-nameshared-key-autha-default-shared-key)
     - How to configure
@@ -140,7 +140,7 @@ The following configs are related to rename and delete operations.
 ### <a name="unsupported features"></a> Features currently not supported
 
 1. User Delegation SAS is currently not supported but we
-   plan to bring support for it in the future.    
+   plan to bring support for it in the future.
    Jira to track this
    workitem : https://issues.apache.org/jira/browse/HADOOP-19406.
 
