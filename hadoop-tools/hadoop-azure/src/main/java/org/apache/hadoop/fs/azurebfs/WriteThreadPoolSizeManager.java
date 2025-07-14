@@ -76,6 +76,8 @@ public final class WriteThreadPoolSizeManager implements Closeable {
 
   private final int initialPoolSize;
 
+  private static final long BYTES_PER_GIGABYTE = 1024L * 1024L * 1024L;
+
   /**
    * Private constructor to initialize the write thread pool and CPU monitor executor
    * based on system resources and ABFS configuration.
@@ -118,38 +120,34 @@ public final class WriteThreadPoolSizeManager implements Closeable {
    * @return Computed max thread pool size.
    */
   private int getComputedMaxPoolSize(final int availableProcessors) {
-    long totalMemoryBytes
-        = getTotalMemoryInBytes(); // Could use available memory if needed
-    long totalMemoryGB = totalMemoryBytes / (BYTES_PER_GIGABYTE);
+      Runtime runtime = Runtime.getRuntime();
 
-    // Estimate memory available per processor core
-    long memoryPerCoreGB = totalMemoryGB / availableProcessors;
+      long maxMemory = runtime.maxMemory();
+      long usedMemory = runtime.totalMemory() - runtime.freeMemory();
+      long availableHeapBytes = maxMemory - usedMemory;
+      long availableHeapGB = (availableHeapBytes + BYTES_PER_GIGABYTE - 1) / BYTES_PER_GIGABYTE;
 
-    LOG.debug("Total memory (GB): {}", totalMemoryGB);
-    LOG.debug("Available processors: {}", availableProcessors);
-    LOG.debug("Memory per core (GB): {}", memoryPerCoreGB);
+    return getMemoryTierMaxThreads(availableHeapGB, availableProcessors);
+  }
 
-    // Determine multiplier based on memory-per-core tiers
+  /**
+   * Returns aggressive thread count = CPU cores × multiplier based on heap tier.
+   */
+  private int getMemoryTierMaxThreads(long availableHeapGB, int availableProcessors) {
     int multiplier;
-    if (memoryPerCoreGB <= LOW_MEMORY_THRESHOLD_GB) {
-      multiplier = LOW_MEMORY_MULTIPLIER;
-      LOG.debug("Using LOW_MEMORY_MULTIPLIER: {}", multiplier);
-    } else if (memoryPerCoreGB <= MEDIUM_MEMORY_THRESHOLD_GB) {
-      multiplier = MEDIUM_MEMORY_MULTIPLIER;
-      LOG.debug("Using MEDIUM_MEMORY_MULTIPLIER: {}", multiplier);
-    } else if (memoryPerCoreGB <= HIGH_MEMORY_THRESHOLD_GB) {
-      multiplier = HIGH_MEMORY_MULTIPLIER;
-      LOG.debug("Using HIGH_MEMORY_MULTIPLIER: {}", multiplier);
+    if (availableHeapGB <= 2) {
+      multiplier = 2;
+    } else if (availableHeapGB <= 4) {
+      multiplier = 4;
+    } else if (availableHeapGB <= 8) {
+      multiplier = 8;
+    } else if (availableHeapGB <= 16) {
+      multiplier = 12;
     } else {
-      multiplier = VERY_HIGH_MEMORY_MULTIPLIER;
-      LOG.debug("Using VERY_HIGH_MEMORY_MULTIPLIER: {}", multiplier);
+      multiplier = 16;
     }
 
-    /* Compute max thread pool size with upper bound safeguard */
-    int computedMaxPoolSize = availableProcessors * multiplier;
-    LOG.debug("Computed max thread pool size: {}", computedMaxPoolSize);
-
-    return computedMaxPoolSize;
+    return availableProcessors * multiplier;
   }
 
   /**
