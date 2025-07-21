@@ -56,26 +56,27 @@ import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.V
  */
 public final class WriteThreadPoolSizeManager implements Closeable {
 
+  /* Maximum allowed size for the thread pool. */
   private final int maxThreadPoolSize;
-
+  /* Executor for periodically monitoring CPU usage. */
   private final ScheduledExecutorService cpuMonitorExecutor;
-
+  /* Thread pool whose size is dynamically managed. */
   private volatile ExecutorService boundedThreadPool;
-
+  /* Lock to ensure thread-safe updates to the thread pool. */
   private final Lock lock = new ReentrantLock();
-
+  /* New computed max size for the thread pool after adjustment. */
   private volatile int newMaxPoolSize;
-
+  /* Logger instance for logging events from WriteThreadPoolSizeManager. */
   private static final Logger LOG = LoggerFactory.getLogger(
       WriteThreadPoolSizeManager.class);
-
+  /* Map to maintain a WriteThreadPoolSizeManager instance per filesystem. */
   private static final ConcurrentHashMap<String, WriteThreadPoolSizeManager>
       POOL_SIZE_MANAGER_MAP = new ConcurrentHashMap<>();
-
+  /* Name of the filesystem associated with this manager. */
   private final String filesystemName;
-
+  /* Initial size for the thread pool when created. */
   private final int initialPoolSize;
-
+  /* Constant representing number of bytes in one gigabyte. */
   private static final long BYTES_PER_GIGABYTE = 1024L * 1024L * 1024L;
 
   /**
