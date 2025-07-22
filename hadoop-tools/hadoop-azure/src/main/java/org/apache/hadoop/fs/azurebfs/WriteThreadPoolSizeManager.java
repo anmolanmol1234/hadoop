@@ -92,6 +92,8 @@ public final class WriteThreadPoolSizeManager implements Closeable {
 
     int availableProcessors = Runtime.getRuntime().availableProcessors();
     int computedMaxPoolSize = getComputedMaxPoolSize(availableProcessors);
+    LOG.debug("The number of available processors is {} ", availableProcessors);
+    LOG.debug("The max thread pool size is {} ", computedMaxPoolSize);
 
     /* Get the initial pool size from config, fallback to at least 1 */
     this.initialPoolSize = Math.max(1,
@@ -127,8 +129,11 @@ public final class WriteThreadPoolSizeManager implements Closeable {
       long usedMemory = runtime.totalMemory() - runtime.freeMemory();
       long availableHeapBytes = maxMemory - usedMemory;
       long availableHeapGB = (availableHeapBytes + BYTES_PER_GIGABYTE - 1) / BYTES_PER_GIGABYTE;
-
-    return getMemoryTierMaxThreads(availableHeapGB, availableProcessors);
+      LOG.debug("The available heap space in GB {} ", availableHeapGB);
+      LOG.debug("The number of available processors is {} ", availableProcessors);
+      int maxpoolSize = getMemoryTierMaxThreads(availableHeapGB, availableProcessors);
+      LOG.debug("The max thread pool size is {} ", maxpoolSize);
+      return maxpoolSize;
   }
 
   /**
