@@ -139,14 +139,12 @@ public final class WriteThreadPoolSizeManager implements Closeable {
    */
   private int getMemoryTierMaxThreads(long availableHeapGB, int availableProcessors) {
     int multiplier;
-    if (availableHeapGB <= 2) {
+    if (availableHeapGB <= 4) {
       multiplier = 4;
-    } else if (availableHeapGB <= 4) {
-      multiplier = 8;
     } else if (availableHeapGB <= 8) {
-      multiplier = 16;
+      multiplier = 8;
     } else {
-      multiplier = 32;
+      multiplier = 16;
     }
     return availableProcessors * multiplier;
   }
