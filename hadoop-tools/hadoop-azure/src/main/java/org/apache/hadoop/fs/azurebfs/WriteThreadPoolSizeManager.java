@@ -40,16 +40,9 @@ import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HIGH_CPU
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.LOW_CPU_THRESHOLD;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.MEDIUM_CPU_THRESHOLD;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.BYTES_PER_GIGABYTE;
-import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.HIGH_MEMORY_MULTIPLIER;
-import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.HIGH_MEMORY_THRESHOLD_GB;
-import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.LOW_MEMORY_MULTIPLIER;
-import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.LOW_MEMORY_THRESHOLD_GB;
-import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.MEDIUM_MEMORY_MULTIPLIER;
-import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.MEDIUM_MEMORY_THRESHOLD_GB;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.POOL_SIZE_INCREASE_FACTOR;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.SIXTY_SECONDS;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.THIRTY_SECONDS;
-import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.VERY_HIGH_MEMORY_MULTIPLIER;
 
 /**
  * Manages a thread pool for writing operations, adjusting the pool size based on CPU utilization.
@@ -76,8 +69,8 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   private final String filesystemName;
   /* Initial size for the thread pool when created. */
   private final int initialPoolSize;
-  /* Constant representing number of bytes in one gigabyte. */
-  private static final long BYTES_PER_GIGABYTE = 1024L * 1024L * 1024L;
+  /* Initially available heap memory. */
+  private final long initialAvailableHeapMemory;
 
   /**
    * Private constructor to initialize the write thread pool and CPU monitor executor
@@ -89,9 +82,11 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   private WriteThreadPoolSizeManager(String filesystemName,
       AbfsConfiguration abfsConfiguration) {
     this.filesystemName = filesystemName;
-
     int availableProcessors = Runtime.getRuntime().availableProcessors();
-    int computedMaxPoolSize = getComputedMaxPoolSize(availableProcessors);
+    /* Get the heap space available when the instance is created */
+    this.initialAvailableHeapMemory = getAvailableHeapMemory();
+    /* Compute the max pool size */
+    int computedMaxPoolSize = getComputedMaxPoolSize(availableProcessors, initialAvailableHeapMemory);
 
     /* Get the initial pool size from config, fallback to at least 1 */
     this.initialPoolSize = Math.max(1,
@@ -120,18 +115,29 @@ public final class WriteThreadPoolSizeManager implements Closeable {
    * @param availableProcessors Number of CPU cores.
    * @return Computed max thread pool size.
    */
-  private int getComputedMaxPoolSize(final int availableProcessors) {
-      Runtime runtime = Runtime.getRuntime();
-
-      long maxMemory = runtime.maxMemory();
-      long usedMemory = runtime.totalMemory() - runtime.freeMemory();
-      long availableHeapBytes = maxMemory - usedMemory;
-      long availableHeapGB = (availableHeapBytes + BYTES_PER_GIGABYTE - 1) / BYTES_PER_GIGABYTE;
-      LOG.debug("The available heap space in GB {} ", availableHeapGB);
+  private int getComputedMaxPoolSize(final int availableProcessors, long initialAvailableHeapMemory) {
+      LOG.debug("The available heap space in GB {} ", initialAvailableHeapMemory);
       LOG.debug("The number of available processors is {} ", availableProcessors);
-      int maxpoolSize = getMemoryTierMaxThreads(availableHeapGB, availableProcessors);
+      int maxpoolSize = getMemoryTierMaxThreads(initialAvailableHeapMemory, availableProcessors);
       LOG.debug("The max thread pool size is {} ", maxpoolSize);
       return maxpoolSize;
+  }
+
+  /**
+   * Calculates the available heap memory in gigabytes.
+   * This method uses {@link Runtime#getRuntime()} to obtain the maximum heap memory
+   * allowed for the JVM and subtracts the currently used memory (total - free)
+   * to determine how much heap memory is still available.
+   * The result is rounded up to the nearest gigabyte.
+   *
+   * @return the available heap memory in gigabytes
+   */
+  private long getAvailableHeapMemory() {
+    Runtime runtime = Runtime.getRuntime();
+    long maxMemory = runtime.maxMemory();
+    long usedMemory = runtime.totalMemory() - runtime.freeMemory();
+    long availableHeapBytes = maxMemory - usedMemory;
+    return (availableHeapBytes + BYTES_PER_GIGABYTE - 1) / BYTES_PER_GIGABYTE;
   }
 
   /**
@@ -202,19 +208,18 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   private void adjustThreadPoolSize(int newMaxPoolSize) {
     synchronized (this) {
       ThreadPoolExecutor threadPoolExecutor
-          = ((ThreadPoolExecutor) boundedThreadPool);
-      int currentCorePoolSize = threadPoolExecutor.getCorePoolSize();
-      if (newMaxPoolSize >= currentCorePoolSize) {
+          = (ThreadPoolExecutor) boundedThreadPool;
+      int currentMaxPoolSize = threadPoolExecutor.getMaximumPoolSize();
+
+      if (newMaxPoolSize != currentMaxPoolSize) {
         threadPoolExecutor.setMaximumPoolSize(newMaxPoolSize);
-        threadPoolExecutor.setCorePoolSize(newMaxPoolSize);
-      } else {
-        threadPoolExecutor.setCorePoolSize(newMaxPoolSize);
-        threadPoolExecutor.setMaximumPoolSize(newMaxPoolSize);
+        LOG.debug("Adjusted maximum thread pool size to: {}", newMaxPoolSize);
       }
-      LOG.debug("The thread pool size is: {} ", newMaxPoolSize);
-      LOG.debug("The pool size is: {} ", threadPoolExecutor.getPoolSize());
-      LOG.debug("The active thread count is: {}",
-          threadPoolExecutor.getActiveCount());
+
+      LOG.debug("Current core pool size: {}",
+          threadPoolExecutor.getCorePoolSize());
+      LOG.debug("Current pool size: {}", threadPoolExecutor.getPoolSize());
+      LOG.debug("Active thread count: {}", threadPoolExecutor.getActiveCount());
     }
   }
 
@@ -254,51 +259,84 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   }
 
   /**
-   * Adjusts the thread pool size based on the current CPU utilization.
-   *  <ul>
-   *  <li>If CPU usage is high, the pool size is reduced by ~33%.</li>
-   *  <li>If CPU usage is medium, the pool size is reduced by ~20%.</li>
-   *  <li>If CPU usage is low, the pool size is increased by 50%, capped at a configured max.</li>
-   *  <li>If CPU usage is moderate, the current size is retained.</li>
-   *  </ul>
+   * Dynamically adjusts the thread pool size based on current CPU utilization
+   * and available heap memory relative to the initially available heap.
    *
-   * @param cpuUtilization the current CPU utilization.
-   *
-   * @throws InterruptedException if the thread pool adjustment is interrupted.
+   * @param cpuUtilization Current system CPU utilization (0.0 to 1.0)
+   * @throws InterruptedException if thread locking is interrupted
    */
-  public void adjustThreadPoolSizeBasedOnCPU(double cpuUtilization)
-      throws InterruptedException {
+  public void adjustThreadPoolSizeBasedOnCPU(double cpuUtilization) throws InterruptedException {
     lock.lock();
     try {
-      int currentPoolSize = ((ThreadPoolExecutor) boundedThreadPool).getMaximumPoolSize();
+      ThreadPoolExecutor executor = (ThreadPoolExecutor) boundedThreadPool;
+      int currentPoolSize = executor.getMaximumPoolSize();
+      long currentHeap = getAvailableHeapMemory();
+      long initialHeap = initialAvailableHeapMemory;
+      LOG.debug("Available heap memory: {} GB, Initial heap memory: {} GB", currentHeap, initialHeap);
+      LOG.debug("Current CPU Utilization: {}", cpuUtilization);
+
       if (cpuUtilization > HIGH_CPU_THRESHOLD) {
-        newMaxPoolSize = Math.max(initialPoolSize,
-            currentPoolSize - currentPoolSize / 3);
-        LOG.debug("High CPU load detected ({}). Reducing pool size: current={}, new={}",
-            cpuUtilization, currentPoolSize, newMaxPoolSize);
+        newMaxPoolSize = calculateReducedPoolSizeHighCPU(currentPoolSize, currentHeap, initialHeap);
       } else if (cpuUtilization > MEDIUM_CPU_THRESHOLD) {
-        newMaxPoolSize = Math.max(initialPoolSize,
-            currentPoolSize - currentPoolSize / 5);
-        LOG.debug("Medium CPU load detected ({}). Moderately reducing pool size: current={}, new={}",
-            cpuUtilization, currentPoolSize, newMaxPoolSize);
+        newMaxPoolSize = calculateReducedPoolSizeMediumCPU(currentPoolSize, currentHeap, initialHeap);
       } else if (cpuUtilization < LOW_CPU_THRESHOLD) {
-        newMaxPoolSize = Math.min(maxThreadPoolSize,
-            (int) (currentPoolSize * POOL_SIZE_INCREASE_FACTOR));
-        LOG.debug("Low CPU load detected ({}). Increasing pool size: current={}, new={}",
-            cpuUtilization, currentPoolSize, newMaxPoolSize);
+        newMaxPoolSize = calculateIncreasedPoolSizeLowCPU(currentPoolSize, currentHeap, initialHeap);
       } else {
         newMaxPoolSize = currentPoolSize;
-        LOG.debug("CPU load within normal range ({}). No change to pool size: current={}",
-            cpuUtilization, currentPoolSize);
+        LOG.debug("CPU load normal ({}). No change: current={}", cpuUtilization, currentPoolSize);
       }
+
       if (newMaxPoolSize != currentPoolSize) {
-        LOG.debug("Adjusting thread pool size from {} to {}", currentPoolSize, newMaxPoolSize);
-        this.adjustThreadPoolSize(newMaxPoolSize);
+        LOG.debug("Resizing thread pool from {} to {}", currentPoolSize, newMaxPoolSize);
+        adjustThreadPoolSize(newMaxPoolSize);
       }
     } finally {
       lock.unlock();
     }
   }
+
+  /**
+   * Calculates reduced pool size under high CPU utilization.
+   */
+  private int calculateReducedPoolSizeHighCPU(int currentPoolSize, long currentHeap, long initialHeap) {
+    if (currentHeap <= initialHeap / 2) {
+      LOG.debug("High CPU & low heap. Aggressively reducing: current={}, new={}",
+          currentPoolSize, currentPoolSize / 2);
+      return Math.max(initialPoolSize, currentPoolSize / 2);
+    }
+    int reduced = Math.max(initialPoolSize, currentPoolSize - currentPoolSize / 3);
+    LOG.debug("High CPU ({}). Reducing pool size moderately: current={}, new={}",
+        HIGH_CPU_THRESHOLD, currentPoolSize, reduced);
+    return reduced;
+  }
+
+  /**
+   * Calculates reduced pool size under medium CPU utilization.
+   */
+  private int calculateReducedPoolSizeMediumCPU(int currentPoolSize, long currentHeap, long initialHeap) {
+    if (currentHeap <= initialHeap / 2) {
+      int reduced = Math.max(initialPoolSize, currentPoolSize - currentPoolSize / 3);
+      LOG.debug("Medium CPU & low heap. Reducing: current={}, new={}", currentPoolSize, reduced);
+      return reduced;
+    }
+    int reduced = Math.max(initialPoolSize, currentPoolSize - currentPoolSize / 5);
+    LOG.debug("Medium CPU ({}). Moderate reduction: current={}, new={}", MEDIUM_CPU_THRESHOLD, currentPoolSize, reduced);
+    return reduced;
+  }
+
+  /**
+   * Calculates increased pool size under low CPU utilization.
+   */
+  private int calculateIncreasedPoolSizeLowCPU(int currentPoolSize, long currentHeap, long initialHeap) {
+    if (currentHeap >= initialHeap * 0.8) {
+      int increased = Math.min(maxThreadPoolSize, (int) (currentPoolSize * POOL_SIZE_INCREASE_FACTOR));
+      LOG.debug("Low CPU & healthy heap. Increasing: current={}, new={}", currentPoolSize, increased);
+      return increased;
+    }
+    LOG.debug("Low CPU but insufficient heap ({} GB). No increase.", currentHeap);
+    return currentPoolSize;
+  }
+
 
   /**
    * Returns the executor service for the thread pool.
