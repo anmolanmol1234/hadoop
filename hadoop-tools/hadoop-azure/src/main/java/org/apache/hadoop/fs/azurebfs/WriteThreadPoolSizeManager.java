@@ -208,18 +208,20 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   private void adjustThreadPoolSize(int newMaxPoolSize) {
     synchronized (this) {
       ThreadPoolExecutor threadPoolExecutor
-          = (ThreadPoolExecutor) boundedThreadPool;
-      int currentMaxPoolSize = threadPoolExecutor.getMaximumPoolSize();
+          = ((ThreadPoolExecutor) boundedThreadPool);
+      int currentCorePoolSize = threadPoolExecutor.getCorePoolSize();
 
-      if (newMaxPoolSize != currentMaxPoolSize) {
+      if (newMaxPoolSize >= currentCorePoolSize) {
         threadPoolExecutor.setMaximumPoolSize(newMaxPoolSize);
-        LOG.debug("Adjusted maximum thread pool size to: {}", newMaxPoolSize);
+        threadPoolExecutor.setCorePoolSize(newMaxPoolSize);
+      } else {
+        threadPoolExecutor.setCorePoolSize(newMaxPoolSize);
+        threadPoolExecutor.setMaximumPoolSize(newMaxPoolSize);
       }
 
-      LOG.debug("Current core pool size: {}",
-          threadPoolExecutor.getCorePoolSize());
-      LOG.debug("Current pool size: {}", threadPoolExecutor.getPoolSize());
-      LOG.debug("Active thread count: {}", threadPoolExecutor.getActiveCount());
+      LOG.debug("The thread pool size is: {} ", newMaxPoolSize);
+      LOG.debug("The pool size is: {} ", threadPoolExecutor.getPoolSize());
+      LOG.debug("The active thread count is: {}", threadPoolExecutor.getActiveCount());
     }
   }
 
