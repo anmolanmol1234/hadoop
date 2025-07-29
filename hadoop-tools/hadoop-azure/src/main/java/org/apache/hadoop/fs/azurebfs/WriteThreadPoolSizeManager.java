@@ -40,6 +40,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HIGH_CPU
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.LOW_CPU_THRESHOLD;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.MEDIUM_CPU_THRESHOLD;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.BYTES_PER_GIGABYTE;
+import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.NINETY_SECONDS;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.POOL_SIZE_INCREASE_FACTOR;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.SIXTY_SECONDS;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.THIRTY_SECONDS;
@@ -239,7 +240,7 @@ public final class WriteThreadPoolSizeManager implements Closeable {
             "Thread pool size adjustment interrupted for filesystem %s",
             filesystemName), e);
       }
-    }, 0, SIXTY_SECONDS, TimeUnit.SECONDS);
+    }, 0, NINETY_SECONDS, TimeUnit.SECONDS);
   }
 
   /**

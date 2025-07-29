@@ -37,6 +37,7 @@ public final class FileSystemConfigurations {
   public static final String USER_HOME_DIRECTORY_PREFIX = "/user";
 
   public static final int SIXTY_SECONDS = 60;
+  public static final int NINETY_SECONDS = 90;
   public static final int THIRTY_SECONDS = 30;
   /**
    * Number of bytes in a gigabyte.
