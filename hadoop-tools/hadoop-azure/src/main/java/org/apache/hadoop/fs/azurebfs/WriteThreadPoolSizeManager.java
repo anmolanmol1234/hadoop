@@ -240,7 +240,7 @@ public final class WriteThreadPoolSizeManager implements Closeable {
             "Thread pool size adjustment interrupted for filesystem %s",
             filesystemName), e);
       }
-    }, 0, NINETY_SECONDS, TimeUnit.SECONDS);
+    }, 0, SIXTY_SECONDS, TimeUnit.SECONDS);
   }
 
   /**
