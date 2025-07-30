@@ -25,6 +25,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -240,7 +242,7 @@ public final class WriteThreadPoolSizeManager implements Closeable {
             "Thread pool size adjustment interrupted for filesystem %s",
             filesystemName), e);
       }
-    }, 0, SIXTY_SECONDS, TimeUnit.SECONDS);
+    }, 0, THIRTY_SECONDS, TimeUnit.SECONDS);
   }
 
   /**
@@ -271,10 +273,10 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   public void adjustThreadPoolSizeBasedOnCPU(double cpuUtilization) throws InterruptedException {
     lock.lock();
     try {
-      ThreadPoolExecutor executor = (ThreadPoolExecutor) boundedThreadPool;
-      int currentPoolSize = executor.getMaximumPoolSize();
       long currentHeap = getAvailableHeapMemory();
       long initialHeap = initialAvailableHeapMemory;
+      ThreadPoolExecutor executor = (ThreadPoolExecutor) boundedThreadPool;
+      int currentPoolSize = executor.getMaximumPoolSize();
       LOG.debug("Available heap memory: {} GB, Initial heap memory: {} GB", currentHeap, initialHeap);
       LOG.debug("Current CPU Utilization: {}", cpuUtilization);
 
