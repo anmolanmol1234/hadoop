@@ -25,8 +25,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -42,9 +40,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HIGH_CPU
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.LOW_CPU_THRESHOLD;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.MEDIUM_CPU_THRESHOLD;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.BYTES_PER_GIGABYTE;
-import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.NINETY_SECONDS;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.POOL_SIZE_INCREASE_FACTOR;
-import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.SIXTY_SECONDS;
 import static org.apache.hadoop.fs.azurebfs.constants.FileSystemConfigurations.THIRTY_SECONDS;
 
 /**
@@ -273,10 +269,10 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   public void adjustThreadPoolSizeBasedOnCPU(double cpuUtilization) throws InterruptedException {
     lock.lock();
     try {
-      long currentHeap = getAvailableHeapMemory();
-      long initialHeap = initialAvailableHeapMemory;
       ThreadPoolExecutor executor = (ThreadPoolExecutor) boundedThreadPool;
       int currentPoolSize = executor.getMaximumPoolSize();
+      long currentHeap = getAvailableHeapMemory();
+      long initialHeap = initialAvailableHeapMemory;
       LOG.debug("Available heap memory: {} GB, Initial heap memory: {} GB", currentHeap, initialHeap);
       LOG.debug("Current CPU Utilization: {}", cpuUtilization);
 
