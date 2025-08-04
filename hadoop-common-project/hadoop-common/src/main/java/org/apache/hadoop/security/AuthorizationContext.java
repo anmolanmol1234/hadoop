@@ -15,31 +15,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.hadoop.security;
 
-package org.apache.hadoop.yarn.webapp;
+/**
+ * Utility for managing a thread-local authorization header for RPC calls.
+ */
+public final class AuthorizationContext {
+    private static final ThreadLocal<byte[]> AUTH_HEADER = new ThreadLocal<>();
 
-import org.glassfish.jersey.jettison.internal.entity.JettisonObjectProvider;
-import org.glassfish.jersey.test.JerseyTest;
-import org.junit.jupiter.api.BeforeEach;
+    private AuthorizationContext() {}
 
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.Application;
+    public static void setCurrentAuthorizationHeader(byte[] header) {
+        AUTH_HEADER.set(header);
+    }
 
-public abstract class JerseyTestBase extends JerseyTest {
-  public static final String JERSEY_RANDOM_PORT = "0";
+    public static byte[] getCurrentAuthorizationHeader() {
+        return AUTH_HEADER.get();
+    }
 
-  @Override
-  protected Application configure() {
-    return new Application();
-  }
-
-  @BeforeEach
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
-  }
-
-  public final WebTarget targetWithJsonObject() {
-    return target().register(new JettisonObjectProvider.App());
-  }
+    public static void clear() {
+        AUTH_HEADER.remove();
+    }
 }
