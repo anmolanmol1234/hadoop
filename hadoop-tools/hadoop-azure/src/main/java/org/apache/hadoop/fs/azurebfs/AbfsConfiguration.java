@@ -477,6 +477,10 @@ public class AbfsConfiguration{
       DefaultValue = DEFAULT_WRITE_THREADPOOL_KEEP_ALIVE_TIME)
   private int writeThreadPoolKeepAliveTime;
 
+  @IntegerConfigurationValidatorAnnotation(ConfigurationKey = FS_AZURE_WRITE_CPU_MONITORING_INTERVAL,
+      DefaultValue = DEFAULT_WRITE_CPU_MONITORING_INTERVAL)
+  private int writeCpuMonitoringInterval;
+
   @IntegerConfigurationValidatorAnnotation(ConfigurationKey = FS_AZURE_WRITE_THREADPOOL_CORE_POOL_SIZE,
       DefaultValue = DEFAULT_WRITE_THREADPOOL_CORE_POOL_SIZE)
   private int writeCorePoolSize;
@@ -1561,6 +1565,10 @@ public class AbfsConfiguration{
 
   public int getWriteThreadPoolKeepAliveTime() {
     return writeThreadPoolKeepAliveTime;
+  }
+
+  public int getWriteCpuMonitoringInterval() {
+    return writeCpuMonitoringInterval;
   }
 
   public int getWriteCorePoolSize() {

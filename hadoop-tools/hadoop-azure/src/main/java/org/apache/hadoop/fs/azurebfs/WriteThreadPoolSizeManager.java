@@ -70,6 +70,8 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   private final int initialPoolSize;
   /* Initially available heap memory. */
   private final long initialAvailableHeapMemory;
+  /* The configuration instance. */
+  private AbfsConfiguration abfsConfiguration;
 
   /**
    * Private constructor to initialize the write thread pool and CPU monitor executor
@@ -81,6 +83,7 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   private WriteThreadPoolSizeManager(String filesystemName,
       AbfsConfiguration abfsConfiguration) {
     this.filesystemName = filesystemName;
+    this.abfsConfiguration = abfsConfiguration;
     int availableProcessors = Runtime.getRuntime().availableProcessors();
     /* Get the heap space available when the instance is created */
     this.initialAvailableHeapMemory = getAvailableHeapMemory();
@@ -105,6 +108,10 @@ public final class WriteThreadPoolSizeManager implements Closeable {
     /* Create a scheduled executor for CPU monitoring and pool adjustment */
     this.cpuMonitorExecutor = Executors.newScheduledThreadPool(
         abfsConfiguration.getWriteCorePoolSize());
+  }
+
+  public AbfsConfiguration getAbfsConfiguration() {
+    return abfsConfiguration;
   }
 
   /**
@@ -199,6 +206,10 @@ public final class WriteThreadPoolSizeManager implements Closeable {
     return newInstance;
   }
 
+  public int getMaxThreadPoolSize() {
+    return maxThreadPoolSize;
+  }
+
   /**
    * Adjusts the thread pool size to the specified maximum pool size.
    *
@@ -238,7 +249,7 @@ public final class WriteThreadPoolSizeManager implements Closeable {
             "Thread pool size adjustment interrupted for filesystem %s",
             filesystemName), e);
       }
-    }, 0, THIRTY_SECONDS, TimeUnit.SECONDS);
+    }, 0, getAbfsConfiguration().getWriteCpuMonitoringInterval(), TimeUnit.SECONDS);
   }
 
   /**

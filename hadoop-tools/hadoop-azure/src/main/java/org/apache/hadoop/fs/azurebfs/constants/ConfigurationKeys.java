@@ -436,6 +436,8 @@ public final class ConfigurationKeys {
    */
   public static final String FS_AZURE_WRITE_THREADPOOL_KEEP_ALIVE_TIME = "fs.azure.write.threadpool.keep.alive.time";
 
+  public static final String FS_AZURE_WRITE_CPU_MONITORING_INTERVAL = "fs.azure.write.cpu.monitoring.interval";
+
   /**Flag to enable/disable sending client transactional ID during create/rename operations: {@value}*/
   public static final String FS_AZURE_ENABLE_CLIENT_TRANSACTION_ID = "fs.azure.enable.client.transaction.id";
 

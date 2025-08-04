@@ -279,6 +279,8 @@ public final class FileSystemConfigurations {
 
   public static final int DEFAULT_WRITE_THREADPOOL_KEEP_ALIVE_TIME = 30;
 
+  public static final int DEFAULT_WRITE_CPU_MONITORING_INTERVAL = 30;
+
   public static final int DEFAULT_WRITE_THREADPOOL_CORE_POOL_SIZE = 1;
 
   public static final boolean DEFAULT_FS_AZURE_ENABLE_CLIENT_TRANSACTION_ID = true;
