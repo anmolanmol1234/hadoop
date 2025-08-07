@@ -71,7 +71,7 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   /* Initially available heap memory. */
   private final long initialAvailableHeapMemory;
   /* The configuration instance. */
-  private AbfsConfiguration abfsConfiguration;
+  private final AbfsConfiguration abfsConfiguration;
 
   /**
    * Private constructor to initialize the write thread pool and CPU monitor executor
@@ -162,21 +162,6 @@ public final class WriteThreadPoolSizeManager implements Closeable {
   }
 
   /**
-   * Get total system memory in bytes using OperatingSystemMXBean
-   *
-   * @return Total memory in bytes
-   */
-  private long getTotalMemoryInBytes() {
-    OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
-    if (osBean instanceof com.sun.management.OperatingSystemMXBean) {
-      com.sun.management.OperatingSystemMXBean sunOsBean
-          = (com.sun.management.OperatingSystemMXBean) osBean;
-      return sunOsBean.getTotalPhysicalMemorySize();  // This returns total memory in bytes
-    }
-    return 0;
-  }
-
-  /**
    * Returns the singleton instance of WriteThreadPoolSizeManager for the given filesystem.
    *
    * @param filesystemName the name of the filesystem.
@@ -204,10 +189,6 @@ public final class WriteThreadPoolSizeManager implements Closeable {
         filesystemName, abfsConfiguration);
     POOL_SIZE_MANAGER_MAP.put(filesystemName, newInstance);
     return newInstance;
-  }
-
-  public int getMaxThreadPoolSize() {
-    return maxThreadPoolSize;
   }
 
   /**
@@ -344,9 +325,12 @@ public final class WriteThreadPoolSizeManager implements Closeable {
       int increased = Math.min(maxThreadPoolSize, (int) (currentPoolSize * POOL_SIZE_INCREASE_FACTOR));
       LOG.debug("Low CPU & healthy heap. Increasing: current={}, new={}", currentPoolSize, increased);
       return increased;
+    } else {
+      // Decrease by 10%
+      int decreased = Math.max(1, (int) (currentPoolSize * 0.9));
+      LOG.debug("Low CPU but insufficient heap ({} GB). Decreasing: current={}, new={}", currentHeap, currentPoolSize, decreased);
+      return decreased;
     }
-    LOG.debug("Low CPU but insufficient heap ({} GB). No increase.", currentHeap);
-    return currentPoolSize;
   }
 
 
