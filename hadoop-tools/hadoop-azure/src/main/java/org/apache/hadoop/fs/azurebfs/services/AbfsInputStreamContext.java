@@ -152,11 +152,11 @@ public class AbfsInputStreamContext extends AbfsStreamContext {
     return this;
   }
 
-    public AbfsInputStreamContext withEncryptionAdapter(
-        ContextEncryptionAdapter contextEncryptionAdapter){
-      this.contextEncryptionAdapter = contextEncryptionAdapter;
-      return this;
-    }
+  public AbfsInputStreamContext withEncryptionAdapter(
+      ContextEncryptionAdapter contextEncryptionAdapter){
+    this.contextEncryptionAdapter = contextEncryptionAdapter;
+    return this;
+  }
 
   public AbfsInputStreamContext build() {
     if (readBufferSize > readAheadBlockSize) {
@@ -229,7 +229,7 @@ public class AbfsInputStreamContext extends AbfsStreamContext {
     return fsBackRef;
   }
 
-    public ContextEncryptionAdapter getEncryptionAdapter() {
-      return contextEncryptionAdapter;
-    }
+  public ContextEncryptionAdapter getEncryptionAdapter() {
+    return contextEncryptionAdapter;
+  }
 }

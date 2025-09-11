@@ -33,7 +33,7 @@ import org.apache.hadoop.classification.VisibleForTesting;
  * The Read Buffer Manager for Rest AbfsClient.
  * V1 implementation of ReadBufferManager.
  */
-final class ReadBufferManagerV1 extends ReadBufferManager {
+public final class ReadBufferManagerV1 extends ReadBufferManager {
 
   private static final int NUM_BUFFERS = 16;
   private static final int NUM_THREADS = 8;
@@ -52,7 +52,7 @@ final class ReadBufferManagerV1 extends ReadBufferManager {
    * Sets the read buffer manager configurations.
    * @param readAheadBlockSize the size of the read-ahead block in bytes
    */
-  static void setReadBufferManagerConfigs(int readAheadBlockSize) {
+  public static void setReadBufferManagerConfigs(int readAheadBlockSize) {
     if (bufferManager == null) {
       LOGGER.debug(
           "ReadBufferManagerV1 not initialized yet. Overriding readAheadBlockSize as {}",
@@ -66,7 +66,7 @@ final class ReadBufferManagerV1 extends ReadBufferManager {
    * Returns the singleton instance of ReadBufferManagerV1.
    * @return the singleton instance of ReadBufferManagerV1
    */
-  static ReadBufferManagerV1 getBufferManager() {
+  public static ReadBufferManagerV1 getBufferManager() {
     if (bufferManager == null) {
       LOCK.lock();
       try {
@@ -88,7 +88,7 @@ final class ReadBufferManagerV1 extends ReadBufferManager {
   void init() {
     buffers = new byte[NUM_BUFFERS][];
     for (int i = 0; i < NUM_BUFFERS; i++) {
-      buffers[i] = new byte[getReadAheadBlockSize()];  // same buffers are reused. These byte arrays are never garbage collected
+      buffers[i] = new byte[getReadAheadBlockSize()];  // same buffers are reused. The byte array never goes back to GC
       getFreeList().add(i);
     }
     for (int i = 0; i < NUM_THREADS; i++) {
