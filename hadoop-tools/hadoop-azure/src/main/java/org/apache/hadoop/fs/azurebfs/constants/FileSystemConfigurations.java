@@ -36,7 +36,25 @@ public final class FileSystemConfigurations {
   public static final boolean DEFAULT_FS_AZURE_ACCOUNT_IS_EXPECT_HEADER_ENABLED = true;
   public static final String USER_HOME_DIRECTORY_PREFIX = "/user";
 
-  private static final int SIXTY_SECONDS = 60_000;
+  public static final int SIXTY_SECONDS = 60;
+  public static final int THIRTY_SECONDS = 30;
+  /**
+   * Number of bytes in a gigabyte.
+   */
+  public static final long BYTES_PER_GIGABYTE = 1024L * 1024 * 1024;
+  /**
+   * Factor by which the pool size is increased when CPU utilization is low.
+   */
+  public static final double LOW_CPU_POOL_SIZE_INCREASE_FACTOR = 1.5;
+  public static final double LOW_CPU_HIGH_MEMORY_DECREASE_FACTOR = 0.9;
+  public static final int HIGH_CPU_REDUCTION_FACTOR = 3;
+  public static final int HIGH_CPU_LOW_MEMORY_REDUCTION_FACTOR = 2;
+  public static final int MEDIUM_CPU_REDUCTION_FACTOR = 5;
+  public static final int MEDIUM_CPU_LOW_MEMORY_REDUCTION_FACTOR = 3;
+  public static final int HIGH_MEDIUM_HEAP_FACTOR = 2;
+  public static final double LOW_CPU_HEAP_FACTOR = 0.8;
+
+
 
   // Retry parameter defaults.
   public static final int DEFAULT_MIN_BACKOFF_INTERVAL = 500;  // 500ms
@@ -263,6 +281,48 @@ public final class FileSystemConfigurations {
   public static final int DEFAULT_FS_AZURE_BLOB_RENAME_THREAD = DEFAULT_FS_AZURE_LISTING_ACTION_THREADS;
 
   public static final int DEFAULT_FS_AZURE_BLOB_DELETE_THREAD = DEFAULT_FS_AZURE_LISTING_ACTION_THREADS;
+
+  public static final boolean DEFAULT_WRITE_DYNAMIC_THREADPOOL_ENABLEMENT = true;
+
+  public static final int DEFAULT_WRITE_THREADPOOL_KEEP_ALIVE_TIME = 30;
+
+  public static final int MIN_WRITE_CPU_MONITORING_INTERVAL = 10;
+
+  public static final int MAX_WRITE_CPU_MONITORING_INTERVAL = 60;
+
+  public static final int DEFAULT_WRITE_CPU_MONITORING_INTERVAL = 15;
+
+  public static final int MIN_WRITE_HIGH_CPU_THRESHOLD = 65;
+
+  public static final int MAX_WRITE_HIGH_CPU_THRESHOLD = 90;
+
+  public static final int DEFAULT_WRITE_HIGH_CPU_THRESHOLD = 80;
+
+  public static final int MIN_WRITE_MEDIUM_CPU_THRESHOLD = 45;
+
+  public static final int MAX_WRITE_MEDIUM_CPU_THRESHOLD = 65;
+
+  public static final int DEFAULT_WRITE_MEDIUM_CPU_THRESHOLD = 60;
+
+  public static final int MIN_WRITE_LOW_CPU_THRESHOLD = 10;
+
+  public static final int MAX_WRITE_LOW_CPU_THRESHOLD = 40;
+
+  public static final int DEFAULT_WRITE_LOW_CPU_THRESHOLD = 30;
+
+  public static final int MIN_WRITE_LOW_TIER_MEMORY_MULTIPLIER = 3;
+
+  public static final int DEFAULT_WRITE_LOW_TIER_MEMORY_MULTIPLIER = 4;
+
+  public static final int MIN_WRITE_MEDIUM_TIER_MEMORY_MULTIPLIER = 6;
+
+  public static final int DEFAULT_WRITE_MEDIUM_TIER_MEMORY_MULTIPLIER = 8;
+
+  public static final int MIN_WRITE_HIGH_TIER_MEMORY_MULTIPLIER = 12;
+
+  public static final int DEFAULT_WRITE_HIGH_TIER_MEMORY_MULTIPLIER = 16;
+
+  public static final int DEFAULT_WRITE_THREADPOOL_CORE_POOL_SIZE = 1;
 
   public static final boolean DEFAULT_FS_AZURE_ENABLE_CLIENT_TRANSACTION_ID = true;
 

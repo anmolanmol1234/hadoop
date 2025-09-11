@@ -488,10 +488,43 @@ public final class ConfigurationKeys {
   public static final String FS_AZURE_BLOB_DIR_RENAME_MAX_THREAD = "fs.azure.blob.dir.rename.max.thread";
   /**Maximum number of thread per blob-delete orchestration: {@value}*/
   public static final String FS_AZURE_BLOB_DIR_DELETE_MAX_THREAD = "fs.azure.blob.dir.delete.max.thread";
+  /**
+   * Configuration key for the keep-alive time for the write thread pool.
+   * This value specifies the amount of time that threads in the write thread pool
+   * will remain idle before being terminated.
+   * Value: {@value}.
+   */
+  public static final String FS_AZURE_WRITE_THREADPOOL_KEEP_ALIVE_TIME = "fs.azure.write.threadpool.keep.alive.time";
+
+  public static final String FS_AZURE_WRITE_CPU_MONITORING_INTERVAL = "fs.azure.write.cpu.monitoring.interval";
+
+  public static final String FS_AZURE_WRITE_DYNAMIC_THREADPOOL_ENABLEMENT = "fs.azure.write.dynamic.threadpool.enablement";
+
+  public static final String FS_AZURE_WRITE_HIGH_CPU_THRESHOLD = "fs.azure.write.high.cpu.threshold";
+
+  public static final String FS_AZURE_WRITE_MEDIUM_CPU_THRESHOLD = "fs.azure.write.medium.cpu.threshold";
+
+  public static final String FS_AZURE_WRITE_LOW_CPU_THRESHOLD = "fs.azure.write.low.cpu.threshold";
+
+  public static final String FS_AZURE_WRITE_LOW_TIER_MEMORY_MULTIPLIER = "fs.azure.write.low.tier.memory.multiplier";
+
+  public static final String FS_AZURE_WRITE_MEDIUM_TIER_MEMORY_MULTIPLIER = "fs.azure.write.medium.tier.memory.multiplier";
+
+  public static final String FS_AZURE_WRITE_HIGH_TIER_MEMORY_MULTIPLIER = "fs.azure.write.high.tier.memory.multiplier";
+
+
+
   /**Flag to enable/disable sending client transactional ID during create/rename operations: {@value}*/
   public static final String FS_AZURE_ENABLE_CLIENT_TRANSACTION_ID = "fs.azure.enable.client.transaction.id";
   /**Flag to enable/disable create idempotency during create operation: {@value}*/
   public static final String FS_AZURE_ENABLE_CREATE_BLOB_IDEMPOTENCY = "fs.azure.enable.create.blob.idempotency";
 
+  /**
+   * Configuration key for the core pool size of the write thread pool.
+   * This value specifies the number of threads to keep in the write thread pool,
+   * even if they are idle.
+   * Value: {@value}.
+   */
+  public static final String FS_AZURE_WRITE_THREADPOOL_CORE_POOL_SIZE = "fs.azure.write.threadpool.core.pool.size";
   private ConfigurationKeys() {}
 }
