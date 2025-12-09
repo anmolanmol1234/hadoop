@@ -77,6 +77,7 @@ import org.apache.hadoop.fs.azurebfs.contracts.exceptions.InvalidUriAuthorityExc
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.InvalidUriException;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.TrileanConversionException;
 import org.apache.hadoop.fs.azurebfs.contracts.services.AzureServiceErrorCode;
+import org.apache.hadoop.fs.azurebfs.services.AbfsWriteMetricsPublisher;
 import org.apache.hadoop.fs.azurebfs.services.ListResponseData;
 import org.apache.hadoop.fs.azurebfs.enums.Trilean;
 import org.apache.hadoop.fs.azurebfs.extensions.EncryptionContextProvider;
@@ -209,6 +210,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
 
   /** ABFS instance reference to be held by the store to avoid GC close. */
   private BackReference fsBackRef;
+  private AbfsWriteMetricsPublisher writeMetricsPublisher;
 
   /**
    * FileSystem Store for {@link AzureBlobFileSystem} for Abfs operations.
@@ -291,6 +293,15 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
           abfsConfiguration.getMaxWriteRequestsToQueue(),
           10L, TimeUnit.SECONDS,
           "abfs-bounded");
+      // existing write thread pool
+      writeMetricsPublisher
+          = new AbfsWriteMetricsPublisher(
+          120_000,
+          this.boundedThreadPool,      // existing write thread pool
+          getClient().getAbfsCounters()
+              .getAbfsWriteResourceUtilizationMetrics());  // existing metrics object
+
+      writeMetricsPublisher.start();
     }
   }
 
@@ -335,6 +346,7 @@ public class AzureBlobFileSystemStore implements Closeable, ListingSupport {
         HadoopExecutors.shutdown(boundedThreadPool, LOG,
             30, TimeUnit.SECONDS);
         boundedThreadPool = null;
+        writeMetricsPublisher.stop();
       }
     } catch (InterruptedException e) {
       LOG.error("Interrupted freeing leases", e);
