@@ -36,8 +36,10 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Hashtable;
@@ -99,6 +101,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPEND_B
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPLICATION_JSON;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPLICATION_OCTET_STREAM;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.APPLICATION_XML;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.AUTHENTICATION_TYPE_FORMAT;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOCK;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOCKLIST;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOCK_BLOB_TYPE;
@@ -108,12 +111,15 @@ import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOCK_TY
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BREAK_LEASE_ACTION;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.COMMA;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.CONTAINER;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.CREATE_SESSION_REQUEST_END_TAG;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.CREATE_SESSION_REQUEST_START_TAG;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.DEFAULT_LEASE_BREAK_PERIOD;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.EMPTY_STRING;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.FORWARD_SLASH;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HTTP_METHOD_DELETE;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HTTP_METHOD_GET;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HTTP_METHOD_HEAD;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HTTP_METHOD_POST;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HTTP_METHOD_PUT;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.HUNDRED_CONTINUE;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.LATEST_BLOCK_FORMAT;
@@ -125,16 +131,22 @@ import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.RENEW_LE
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.ROOT_PATH;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.SINGLE_WHITE_SPACE;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.STAR;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.SESSION;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.TRUE;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_AUTHENTICATION_TYPE;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_BLOB_ERROR_CODE_END_XML;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_BLOB_ERROR_CODE_START_XML;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_BLOB_ERROR_MESSAGE_END_XML;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_BLOB_ERROR_MESSAGE_START_XML;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_BLOCK_NAME;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_COMMITTED_BLOCKS;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_EXPIRATION;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_HDI_ISFOLDER;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_HDI_PERMISSION;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_ID;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_NAME;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_SESSION_KEY;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_TAG_SESSION_TOKEN;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XML_VERSION;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XMS_PROPERTIES_ENCODING_ASCII;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.XMS_PROPERTIES_ENCODING_UNICODE;
@@ -172,6 +184,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.HttpQueryParams.QUERY_PARA
 import static org.apache.hadoop.fs.azurebfs.constants.HttpQueryParams.QUERY_PARAM_PREFIX;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpQueryParams.QUERY_PARAM_RESTYPE;
 import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.ERR_BLOB_LIST_PARSING;
+import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.ERR_CREATE_SESSION_PARSING;
 import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.PATH_EXISTS;
 import static org.apache.hadoop.fs.azurebfs.utils.UriUtils.isKeyForDirectorySet;
 import static org.apache.hadoop.fs.azurebfs.services.AbfsErrors.ATOMIC_DIR_RENAME_RECOVERY_ON_GET_PATH_EXCEPTION;
@@ -2120,6 +2133,23 @@ public class AbfsBlobClient extends AbfsClient {
   }
 
   /**
+   * Generates the XML request body for the Create Session API.
+   *
+   * @param authenticationType session authentication type.
+   * @return XML representation of the Create Session request.
+   */
+  private static String generateCreateSessionXml(final String authenticationType) {
+    StringBuilder builder = new StringBuilder();
+    builder.append(String.format(XML_VERSION));
+    builder.append(String.format(CREATE_SESSION_REQUEST_START_TAG));
+    builder.append(String.format(
+        AUTHENTICATION_TYPE_FORMAT,
+        authenticationType));
+    builder.append(String.format(CREATE_SESSION_REQUEST_END_TAG));
+    return builder.toString();
+  }
+
+  /**
    * Checks if the specified path exists as a directory.
    *
    * @param path the path of the directory to check.
@@ -2463,5 +2493,101 @@ public class AbfsBlobClient extends AbfsClient {
         requestHeaders);
     op.execute(tracingContext);
     return op;
+  }
+
+  /**
+   * Creates a session for the configured Blob container using the
+   * Create Session API.
+   *
+   * <p>The request is authenticated using the configured OAuth credentials.
+   * On successful completion, the service returns session credentials that
+   * can be used to authorize subsequent Blob requests.</p>
+   *
+   * @param tracingContext tracing context associated with the request.
+   * @return session credentials returned by the Create Session API.
+   * @throws AzureBlobFileSystemException if the session creation request
+   *     fails or the response cannot be parsed.
+   */
+  public SessionCredentials createSession(final TracingContext tracingContext) throws AzureBlobFileSystemException {
+    // Generate the Create Session XML request body.
+    final String requestXml = generateCreateSessionXml(getAbfsConfiguration().getSessionAuthenticationType().name());
+    final byte[] requestBody = requestXml.getBytes(StandardCharsets.UTF_8);
+
+    // Create the default request headers and add the XML payload headers.
+    final List<AbfsHttpHeader> requestHeaders = createDefaultHeaders();
+
+    requestHeaders.add(new AbfsHttpHeader(CONTENT_TYPE, APPLICATION_XML));
+    requestHeaders.add(new AbfsHttpHeader(CONTENT_LENGTH, String.valueOf(requestBody.length)));
+
+    // Build the query parameters for the Create Session API.
+    final AbfsUriQueryBuilder queryBuilder = createDefaultUriQueryBuilder();
+    queryBuilder.addQuery(QUERY_PARAM_RESTYPE, CONTAINER);
+    queryBuilder.addQuery(QUERY_PARAM_COMP, SESSION);
+    final URL url = createRequestUrl(queryBuilder.toString());
+
+    // Create and execute the Create Session REST operation.
+    final AbfsRestOperation op =
+        getAbfsRestOperation(AbfsRestOperationType.CreateSession,
+            HTTP_METHOD_POST,
+            url,
+            requestHeaders,
+            requestBody,
+            0,
+            requestBody.length,
+            null /* sasTokenForReuse - Create Session always uses OAuth, never SAS */);
+
+    op.execute(tracingContext);
+    // Parse the response and return the session credentials.
+    return parseCreateSessionResponse(op);
+  }
+
+  /**
+   * Parses the XML response returned by the Create Session API.
+   *
+   * @param op completed Create Session REST operation.
+   * @return {@link SessionCredentials} returned by the service.
+   * @throws AzureBlobFileSystemException if the response cannot be parsed.
+   */
+  private SessionCredentials parseCreateSessionResponse(final AbfsRestOperation op) throws AzureBlobFileSystemException {
+    try (InputStream stream = op.getResult().getContentInputStream()) {
+      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      Document document = factory.newDocumentBuilder().parse(stream);
+      document.getDocumentElement().normalize();
+
+      final String sessionId = getRequiredElementValue(document, XML_TAG_ID);
+      final String authenticationType = getRequiredElementValue(document,
+          XML_TAG_AUTHENTICATION_TYPE);
+      final String expiration = getRequiredElementValue(document,
+          XML_TAG_EXPIRATION);
+      final String sessionToken = getRequiredElementValue(document,
+          XML_TAG_SESSION_TOKEN);
+      final String sessionKey = getRequiredElementValue(document,
+          XML_TAG_SESSION_KEY);
+
+      return new SessionCredentials(sessionId, sessionToken, sessionKey,
+          authenticationType, Date.from(Instant.parse(expiration)));
+    } catch (Exception ex) {
+      throw new AbfsDriverException(ERR_CREATE_SESSION_PARSING, ex);
+    }
+  }
+
+  /**
+   * Returns the value of the specified XML element.
+   *
+   * @param document parsed XML document.
+   * @param tagName XML element name.
+   * @return value of the XML element.
+   * @throws IOException if the element is missing or empty.
+   */
+  private String getRequiredElementValue(final Document document, final String tagName) throws IOException {
+    NodeList nodeList = document.getElementsByTagName(tagName);
+    if (nodeList == null || nodeList.getLength() == 0) {
+      throw new IOException("Missing required XML element: " + tagName);
+    }
+    String value = nodeList.item(0).getTextContent();
+    if (value == null || value.trim().isEmpty()) {
+      throw new IOException("Empty XML element: " + tagName);
+    }
+    return value.trim();
   }
 }

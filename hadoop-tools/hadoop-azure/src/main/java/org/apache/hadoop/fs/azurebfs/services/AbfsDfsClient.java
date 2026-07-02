@@ -1906,4 +1906,14 @@ public class AbfsDfsClient extends AbfsClient {
           tracingContext, sourceEtagAfterFailure, isMetadataIncompleteState);
     }
   }
+
+  /**
+   * Creates a storage session and returns the corresponding session credentials.
+   *
+   * @param tracingContext tracing context associated with the request.
+   * @return session credentials returned by the storage service.
+   */
+  public SessionCredentials createSession(final TracingContext tracingContext) {
+    throw new UnsupportedOperationException("Create session not supported on DFS Endpoint");
+  }
 }

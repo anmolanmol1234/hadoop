@@ -73,6 +73,14 @@ public final class ConfigurationKeys {
   public static final String FS_AZURE_ACCOUNT_KEY_PROPERTY_NAME = "fs.azure.account.key";
 
   /**
+   * Configuration property that specifies the authentication type used for
+   * Azure Blob Storage Session Authentication.
+   *
+   * <p>Currently, only {@link SessionAuthenticationType#HMAC} is supported.</p>
+   */
+  public static final String FS_AZURE_SESSION_AUTHENTICATION_TYPE = "fs.azure.session.authentication.type";
+
+  /**
    * Config to set separate metrics account in case user don't want to use
    * existing storage account for metrics collection.
    * Value: {@value}.

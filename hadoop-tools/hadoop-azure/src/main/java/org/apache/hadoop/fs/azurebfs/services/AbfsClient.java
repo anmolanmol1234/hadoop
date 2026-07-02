@@ -193,6 +193,7 @@ public abstract class AbfsClient implements Closeable {
   private final String fileSystemId;
 
   private AbfsServiceType abfsServiceType;
+  private final AbfsSessionManager sessionManager;
 
   /**
    * logging the rename failure if metadata is in an incomplete state.
@@ -221,6 +222,7 @@ public abstract class AbfsClient implements Closeable {
     this.renameResilience = abfsConfiguration.getRenameResilience();
     this.fileSystemId = abfsClientContext.getFileSystemId();
     this.abfsServiceType = abfsServiceType;
+    this.sessionManager =   new AbfsSessionManager(this);
 
     if (encryptionContextProvider != null) {
       this.encryptionContextProvider = encryptionContextProvider;
@@ -1737,6 +1739,15 @@ public abstract class AbfsClient implements Closeable {
    * @throws UnsupportedEncodingException if encoding fails
    */
   public abstract byte[] encodeAttribute(String value) throws UnsupportedEncodingException;
+
+  /**
+   * Creates a storage session and returns the corresponding session credentials.
+   *
+   * @param tracingContext tracing context associated with the request.
+   * @return session credentials returned by the storage service.
+   * @throws AzureBlobFileSystemException if the session creation request fails.
+   */
+  public abstract SessionCredentials createSession(final TracingContext tracingContext) throws AzureBlobFileSystemException;
 
   /**
    * Decode attribute with decoding based on Endpoint used.

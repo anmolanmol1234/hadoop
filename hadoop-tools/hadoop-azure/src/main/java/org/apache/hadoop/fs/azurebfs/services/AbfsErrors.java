@@ -85,5 +85,6 @@ public final class AbfsErrors {
   public static final String INCORRECT_INGRESS_TYPE = "Ingress Type Cannot be DFS for Blob endpoint configured filesystem.";
   public static final String ERR_INVALID_ABFS_STATE = "Invalid state for AzureBlobFilesystem. Either Filesystem was closed or not initialized.";
   public static final String ERR_TAIL_LATENCY_REQUEST_TIMEOUT = "Request Duration Exceeded Tail Latency Threshold.";
+  public static final String ERR_CREATE_SESSION_PARSING = "Failed to parse Create Session response.";
   private AbfsErrors() {}
 }

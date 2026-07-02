@@ -33,6 +33,7 @@ import org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants;
 import org.apache.hadoop.fs.azurebfs.constants.AbfsServiceType;
 import org.apache.hadoop.fs.azurebfs.constants.AuthConfigurations;
 import org.apache.hadoop.fs.azurebfs.constants.HttpOperationType;
+import org.apache.hadoop.fs.azurebfs.constants.SessionAuthenticationType;
 import org.apache.hadoop.fs.azurebfs.contracts.annotations.ConfigurationValidationAnnotations.Base64StringConfigurationValidatorAnnotation;
 import org.apache.hadoop.fs.azurebfs.contracts.annotations.ConfigurationValidationAnnotations.BooleanConfigurationValidatorAnnotation;
 import org.apache.hadoop.fs.azurebfs.contracts.annotations.ConfigurationValidationAnnotations.IntegerConfigurationValidatorAnnotation;
@@ -647,6 +648,11 @@ public class AbfsConfiguration{
   @BooleanConfigurationValidatorAnnotation(ConfigurationKey = FS_AZURE_RESTRICT_GPS_ON_OPENFILE,
   DefaultValue = DEFAULT_FS_AZURE_RESTRICT_GPS_ON_OPENFILE)
   private boolean restrictGpsOnOpenFile;
+
+  @StringConfigurationValidatorAnnotation(
+      ConfigurationKey = FS_AZURE_SESSION_AUTHENTICATION_TYPE,
+      DefaultValue = DEFAULT_SESSION_AUTHENTICATION_TYPE)
+  private String sessionAuthenticationType;
 
   private String clientProvidedEncryptionKey;
   private String clientProvidedEncryptionKeySHA;
@@ -1349,6 +1355,18 @@ public class AbfsConfiguration{
 
   public DelegatingSSLSocketFactory.SSLChannelMode getPreferredSSLFactoryOption() {
     return getEnum(FS_AZURE_SSL_CHANNEL_MODE_KEY, DEFAULT_FS_AZURE_SSL_CHANNEL_MODE);
+  }
+
+  /**
+   * Returns the configured session authentication type.
+   *
+   * @return configured session authentication type.
+   * @throws IllegalArgumentException if the configured value is not a supported
+   *         {@link SessionAuthenticationType}.
+   */
+  public SessionAuthenticationType getSessionAuthenticationType() {
+    return getEnum(FS_AZURE_SESSION_AUTHENTICATION_TYPE,
+        SessionAuthenticationType.valueOf(DEFAULT_SESSION_AUTHENTICATION_TYPE));
   }
 
   /**

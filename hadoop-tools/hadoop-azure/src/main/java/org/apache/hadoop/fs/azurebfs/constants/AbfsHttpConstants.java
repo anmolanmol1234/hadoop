@@ -63,6 +63,12 @@ public final class AbfsHttpConstants {
   public static final String CONTAINER = "container";
 
   /**
+   * HTTP Query Parameter Value to denote the Create Session operation.
+   * {@value}.
+   */
+  public static final String SESSION = "session";
+
+  /**
    * HTTP Header Value to denote component as metadata.
    * {@value}.
    */
@@ -267,6 +273,13 @@ public final class AbfsHttpConstants {
   public static final String XML_TAG_HAS_LEGAL_HOLD = "HasLegalHold";
   public static final String XML_TAG_DELETED_TIME = "DeletedTime";
   public static final String XML_TAG_REMAINING_RETENTION_DAYS = "RemainingRetentionDays";
+  public static final String XML_TAG_CREATE_SESSION_RESULT = "CreateSessionResult";
+  public static final String XML_TAG_ID = "Id";
+  public static final String XML_TAG_EXPIRATION = "Expiration";
+  public static final String XML_TAG_AUTHENTICATION_TYPE = "AuthenticationType";
+  public static final String XML_TAG_CREDENTIALS = "Credentials";
+  public static final String XML_TAG_SESSION_TOKEN = "SessionToken";
+  public static final String XML_TAG_SESSION_KEY = "SessionKey";
 
   /**
    * Value that differentiates categories of the HTTP status.
@@ -300,6 +313,24 @@ public final class AbfsHttpConstants {
    * The placeholder will be replaced with the block identifier.
    */
   public static final String LATEST_BLOCK_FORMAT = "<Latest>%s</Latest>%n";
+
+  /**
+   * XML start tag for Create Session request.
+   * {@value}.
+   */
+  public static final String CREATE_SESSION_REQUEST_START_TAG = "<CreateSessionRequest>";
+
+  /**
+   * XML end tag for Create Session request.
+   * {@value}.
+   */
+  public static final String CREATE_SESSION_REQUEST_END_TAG = "</CreateSessionRequest>";
+
+  /**
+   * XML format for the AuthenticationType element in Create Session request.
+   * {@value}.
+   */
+  public static final String AUTHENTICATION_TYPE_FORMAT = "<AuthenticationType>%s</AuthenticationType>";
 
 
   /**
