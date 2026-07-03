@@ -231,7 +231,7 @@ public class TestAbfsRenameRetryRecovery extends AbstractAbfsIntegrationTest {
       final byte[] buffer = answer.getArgument(0);
       final int offset = answer.getArgument(1);
       final int length = answer.getArgument(2);
-      normalRestOp.signRequest(normalOp, length, false);
+      normalRestOp.signRequest(normalOp, length, getTestTracingContext(getFileSystem(), false));
       normalOp.sendPayload(buffer, offset, length);
       normalOp.processResponse(buffer, offset, length);
       LOG.info("Actual outcome is {} \"{}\" \"{}\"; injecting failure",

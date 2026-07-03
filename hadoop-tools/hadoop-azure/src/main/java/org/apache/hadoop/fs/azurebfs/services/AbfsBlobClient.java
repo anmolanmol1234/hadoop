@@ -37,6 +37,9 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -84,6 +87,7 @@ import org.apache.hadoop.fs.azurebfs.extensions.EncryptionContextProvider;
 import org.apache.hadoop.fs.azurebfs.extensions.SASTokenProvider;
 import org.apache.hadoop.fs.azurebfs.oauth2.AccessTokenProvider;
 import org.apache.hadoop.fs.azurebfs.security.ContextEncryptionAdapter;
+import org.apache.hadoop.fs.azurebfs.utils.Base64;
 import org.apache.hadoop.fs.azurebfs.utils.ListUtils;
 import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
 
@@ -2536,6 +2540,7 @@ public class AbfsBlobClient extends AbfsClient {
             requestBody.length,
             null /* sasTokenForReuse - Create Session always uses OAuth, never SAS */);
 
+    op.setSessionAuthDisabledForOperation(true);
     op.execute(tracingContext);
     // Parse the response and return the session credentials.
     return parseCreateSessionResponse(op);
@@ -2561,13 +2566,42 @@ public class AbfsBlobClient extends AbfsClient {
           XML_TAG_EXPIRATION);
       final String sessionToken = getRequiredElementValue(document,
           XML_TAG_SESSION_TOKEN);
-      final String sessionKey = getRequiredElementValue(document,
-          XML_TAG_SESSION_KEY);
+      final byte[] sessionKey = Base64.decode(
+          getRequiredElementValue(document, XML_TAG_SESSION_KEY));
 
       return new SessionCredentials(sessionId, sessionToken, sessionKey,
-          authenticationType, Date.from(Instant.parse(expiration)));
+          authenticationType, parseExpiration(expiration));
     } catch (Exception ex) {
       throw new AbfsDriverException(ERR_CREATE_SESSION_PARSING, ex);
+    }
+  }
+
+  /**
+   * Parses the {@code Expiration} value returned by the Create Session API.
+   *
+   * <p>Per the Create Session service contract, the {@code Expiration} field
+   * is formatted as an RFC 1123 date/time string (e.g.
+   * {@code "Thu, 02 Jul 2026 10:15:30 GMT"}). An ISO-8601 fallback is
+   * attempted for defensive compatibility in case the service ever emits
+   * a different format on a specific code path.
+   *
+   * @param expiration the raw {@code Expiration} value from the response body.
+   * @return the parsed {@link Instant}.
+   * @throws IOException if the value matches neither RFC 1123 nor ISO-8601.
+   */
+  private static Instant parseExpiration(final String expiration)
+      throws IOException {
+    try {
+      return ZonedDateTime.parse(expiration, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant();
+    } catch (DateTimeParseException rfc1123Ex) {
+      try {
+        return Instant.parse(expiration);
+      } catch (DateTimeParseException isoEx) {
+        final IOException ioEx = new IOException(
+            "Unrecognized Expiration format in Create Session response: '" + expiration + "'. Expected RFC 1123 or ISO-8601.", rfc1123Ex);
+        ioEx.addSuppressed(isoEx);
+        throw ioEx;
+      }
     }
   }
 

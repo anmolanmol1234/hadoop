@@ -137,6 +137,40 @@ public class AbfsRestOperation {
   private int apacheHttpClientIoExceptions = 0;
 
   /**
+   * When {@code true}, this operation must not use session authentication
+   * even if it is otherwise enabled. Set on Create Session API call.
+   */
+  private boolean sessionAuthDisabledForOperation = false;
+
+  /**
+   * Tracks whether this operation has already been retried once after a
+   * session invalidation. Prevents infinite retry loops if the service
+   * keeps returning session-authentication failures.
+   */
+  private boolean retriedAfterSessionInvalidation = false;
+
+  /**
+   * Set inside the auth switch when this attempt was signed with session
+   * credentials. Used by the 401 retry hook to distinguish session-auth
+   * failures from OAuth failures, so we only invalidate the session on a
+   * failure that could actually be caused by a bad session.
+   */
+  private boolean signedWithSessionCreds = false;
+
+  /**
+   * Marks this operation as ineligible for session authentication. Used by
+   * the Create Session call itself so that it authenticates using OAuth
+   * rather than attempting to sign the request with a session that does
+   * not yet exist.
+   *
+   * @param disabled {@code true} to disable session authentication for
+   *     this operation.
+   */
+  public void setSessionAuthDisabledForOperation(final boolean disabled) {
+    this.sessionAuthDisabledForOperation = disabled;
+  }
+
+  /**
    * Checks if there is non-null HTTP response.
    * @return true if there is a non-null HTTP response from the ABFS call.
    */
@@ -416,7 +450,7 @@ public class AbfsRestOperation {
       incrementCounter(AbfsStatistic.CONNECTIONS_MADE, 1);
       tracingContext.constructHeader(httpOperation, failureReason, retryPolicy.getAbbreviation());
 
-      signRequest(httpOperation, hasRequestBody ? bufferLength : 0, tracingContext.isMetricCall());
+      signRequest(httpOperation, hasRequestBody ? bufferLength : 0, tracingContext);
 
     } catch (IOException e) {
       LOG.debug("Auth failure: {}, {}", method, url);
@@ -483,6 +517,22 @@ public class AbfsRestOperation {
       LOG.debug("HttpRequest: {}: {}", operationType, httpOperation);
 
       int status = httpOperation.getStatusCode();
+
+      if (status == HttpURLConnection.HTTP_UNAUTHORIZED
+          && signedWithSessionCreds
+          && !retriedAfterSessionInvalidation) {
+        LOG.debug("Received 401 on a session-signed request; invalidating "
+            + "cached session and retrying once.");
+        client.getSessionManager().invalidateCurrentSession();
+        retriedAfterSessionInvalidation = true;
+        // Reset the session-sign marker so the retry attempt is judged on
+        // its own outcome. The next attempt will either mint a fresh
+        // session or, if Create Session enters fallback, use OAuth.
+        signedWithSessionCreds = false;
+        // Signal retry to the existing retry loop.
+        return false;
+      }
+
       failureReason = RetryReason.getAbbreviation(null, status, httpOperation.getStorageErrorMessage());
       retryPolicy = client.getRetryPolicy(failureReason);
 
@@ -578,15 +628,35 @@ public class AbfsRestOperation {
   }
 
   /**
+   * Returns whether session authentication should be used for this operation.
+   *
+   * <p>Session authentication is used only if it is enabled for the client,
+   * not disabled for this operation, and the session manager determines that
+   * the operation is eligible.
+   *
+   * @return {@code true} if session authentication should be used;
+   *     {@code false} otherwise.
+   */
+  private boolean shouldUseSessionAuth() {
+    if (sessionAuthDisabledForOperation) {
+      return false;
+    }
+    if (client == null || !client.isSessionAuthEnabled()) {
+      return false;
+    }
+    final AbfsSessionManager sessionManager = client.getSessionManager();
+    return sessionManager != null && sessionManager.isEligible(this);
+  }
+
+  /**
    * Sign an operation.
    * @param httpOperation operation to sign
    * @param bytesToSign how many bytes to sign for shared key auth.
    * @throws IOException failure
    */
   @VisibleForTesting
-  public void signRequest(final AbfsHttpOperation httpOperation, int bytesToSign,
-      boolean isMetricCall) throws IOException {
-    if (isMetricCall && client.getAbfsMetricsManager() != null
+  public void signRequest(final AbfsHttpOperation httpOperation, int bytesToSign, TracingContext tracingContext) throws IOException {
+    if (tracingContext.isMetricCall() && client.getAbfsMetricsManager() != null
         && client.getAbfsMetricsManager().hasSeparateMetricAccount()) {
       client.getAbfsMetricsManager().getMetricSharedkeyCredentials()
           .signRequest(httpOperation, bytesToSign);
@@ -594,6 +664,19 @@ public class AbfsRestOperation {
       switch (client.getAuthType()) {
       case Custom:
       case OAuth:
+        if (shouldUseSessionAuth()) {
+          final SessionKeyCredentials sessionCredentials =
+              client.getSessionManager().getSessionCredentials(tracingContext);
+          if (sessionCredentials != null) {
+            LOG.debug("Signing request with session credentials");
+            sessionCredentials.signRequest(httpOperation, bytesToSign);
+            signedWithSessionCreds = true;
+            break;
+          }
+          // Session unavailable (fallback window, transient failure, or
+          // feature disabled for this operation). Fall through to the
+          // existing OAuth authentication path.
+        }
         LOG.debug("Authenticating request with OAuth2 access token");
         httpOperation.setRequestProperty(HttpHeaderConfigurations.AUTHORIZATION,
             client.getAccessToken());

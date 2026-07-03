@@ -651,8 +651,46 @@ public class AbfsConfiguration{
 
   @StringConfigurationValidatorAnnotation(
       ConfigurationKey = FS_AZURE_SESSION_AUTHENTICATION_TYPE,
-      DefaultValue = DEFAULT_SESSION_AUTHENTICATION_TYPE)
+      DefaultValue = DEFAULT_FS_AZURE_SESSION_AUTHENTICATION_TYPE)
   private String sessionAuthenticationType;
+
+  @BooleanConfigurationValidatorAnnotation(
+      ConfigurationKey = FS_AZURE_ENABLE_SESSION_AUTH,
+      DefaultValue = DEFAULT_FS_AZURE_ENABLE_SESSION_AUTH)
+  private boolean enableSessionAuth;
+
+  @IntegerConfigurationValidatorAnnotation(
+      ConfigurationKey = FS_AZURE_SESSION_REFRESH_THRESHOLD_SECONDS,
+      MinValue = 0,
+      MaxValue = 300,
+      DefaultValue = DEFAULT_FS_AZURE_SESSION_REFRESH_THRESHOLD_SECONDS)
+  private int sessionRefreshThresholdSeconds;
+
+  @IntegerConfigurationValidatorAnnotation(
+      ConfigurationKey = FS_AZURE_SESSION_FALLBACK_DURATION_SECONDS,
+      MinValue = 0,
+      MaxValue = 3600,
+      DefaultValue = DEFAULT_FS_AZURE_SESSION_FALLBACK_DURATION_SECONDS)
+  private int sessionFallbackDurationSeconds;
+
+  @IntegerConfigurationValidatorAnnotation(
+      ConfigurationKey = FS_AZURE_SESSION_MAX_RETRY_COUNT,
+      MinValue = 0,
+      MaxValue = 10,
+      DefaultValue = DEFAULT_FS_AZURE_SESSION_MAX_RETRY_COUNT)
+  private int sessionMaxRetryCount;
+
+  @IntegerConfigurationValidatorAnnotation(
+      ConfigurationKey = FS_AZURE_SESSION_RETRY_INTERVAL_SECONDS,
+      MinValue = 0,
+      MaxValue = 600,
+      DefaultValue = DEFAULT_FS_AZURE_SESSION_RETRY_INTERVAL_SECONDS)
+  private int sessionRetryIntervalSeconds;
+
+  @BooleanConfigurationValidatorAnnotation(
+      ConfigurationKey = FS_AZURE_SESSION_REQUEST_RETRY_ON_INVALID_SESSION,
+      DefaultValue = DEFAULT_FS_AZURE_SESSION_REQUEST_RETRY_ON_INVALID_SESSION)
+  private boolean sessionRequestRetryOnInvalidSession;
 
   private String clientProvidedEncryptionKey;
   private String clientProvidedEncryptionKeySHA;
@@ -1366,7 +1404,31 @@ public class AbfsConfiguration{
    */
   public SessionAuthenticationType getSessionAuthenticationType() {
     return getEnum(FS_AZURE_SESSION_AUTHENTICATION_TYPE,
-        SessionAuthenticationType.valueOf(DEFAULT_SESSION_AUTHENTICATION_TYPE));
+        SessionAuthenticationType.valueOf(DEFAULT_FS_AZURE_SESSION_AUTHENTICATION_TYPE));
+  }
+
+  public boolean isSessionAuthEnabled() {
+    return enableSessionAuth;
+  }
+
+  public int getSessionRefreshThresholdSeconds() {
+    return sessionRefreshThresholdSeconds;
+  }
+
+  public int getSessionFallbackDurationSeconds() {
+    return sessionFallbackDurationSeconds;
+  }
+
+  public int getSessionMaxRetryCount() {
+    return sessionMaxRetryCount;
+  }
+
+  public int getSessionRetryIntervalSeconds() {
+    return sessionRetryIntervalSeconds;
+  }
+
+  public boolean isSessionRequestRetryOnInvalidSession() {
+    return sessionRequestRetryOnInvalidSession;
   }
 
   /**

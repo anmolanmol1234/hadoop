@@ -311,7 +311,13 @@ public final class FileSystemConfigurations {
   public static final int DEFAULT_FS_AZURE_MAX_MERGED_READ_SIZE_FOR_VECTORED_READS = 4 * ONE_MB;
   public static final int DEFAULT_FS_AZURE_MAX_MERGED_READ_SIZE_FOR_VECTORED_READS_THROUGHPUT = 8 * ONE_MB;
   public static final boolean DEFAULT_FS_AZURE_RESTRICT_GPS_ON_OPENFILE = false;
-  public static final String DEFAULT_SESSION_AUTHENTICATION_TYPE = "HMAC";
+  public static final String DEFAULT_FS_AZURE_SESSION_AUTHENTICATION_TYPE = "HMAC";
+  public static final boolean DEFAULT_FS_AZURE_ENABLE_SESSION_AUTH = false;
+  public static final int DEFAULT_FS_AZURE_SESSION_REFRESH_THRESHOLD_SECONDS = 60;
+  public static final int DEFAULT_FS_AZURE_SESSION_FALLBACK_DURATION_SECONDS = 300;
+  public static final int DEFAULT_FS_AZURE_SESSION_MAX_RETRY_COUNT = 3;
+  public static final int DEFAULT_FS_AZURE_SESSION_RETRY_INTERVAL_SECONDS = 30;
+  public static final boolean DEFAULT_FS_AZURE_SESSION_REQUEST_RETRY_ON_INVALID_SESSION = true;
 
   private FileSystemConfigurations() {}
 }

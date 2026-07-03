@@ -80,6 +80,34 @@ public final class ConfigurationKeys {
    */
   public static final String FS_AZURE_SESSION_AUTHENTICATION_TYPE = "fs.azure.session.authentication.type";
 
+  /** Master switch for Azure Blob Storage Session Authentication. */
+  public static final String FS_AZURE_ENABLE_SESSION_AUTH = "fs.azure.enable.session.auth";
+
+  /**
+   * Time (seconds) before session expiration at which the driver proactively
+   * refreshes the session.
+   */
+  public static final String FS_AZURE_SESSION_REFRESH_THRESHOLD_SECONDS = "fs.azure.session.refresh.threshold.seconds";
+
+  /**
+   * Duration (seconds) for which the driver remains in OAuth-fallback mode
+   * after a Create Session failure before retrying session creation.
+   */
+  public static final String FS_AZURE_SESSION_FALLBACK_DURATION_SECONDS = "fs.azure.session.fallback.duration.seconds";
+
+  /** Maximum retries for Create Session before entering fallback. */
+  public static final String FS_AZURE_SESSION_MAX_RETRY_COUNT = "fs.azure.session.max.retry.count";
+
+  /** Delay (seconds) between Create Session retry attempts. */
+  public static final String FS_AZURE_SESSION_RETRY_INTERVAL_SECONDS = "fs.azure.session.retry.interval.seconds";
+
+  /**
+   * When true, on a session-related authentication failure the driver
+   * automatically invalidates the current session and retries the request
+   * once before falling back to OAuth.
+   */
+  public static final String FS_AZURE_SESSION_REQUEST_RETRY_ON_INVALID_SESSION = "fs.azure.session.request.retry.on.invalid.session";
+
   /**
    * Config to set separate metrics account in case user don't want to use
    * existing storage account for metrics collection.

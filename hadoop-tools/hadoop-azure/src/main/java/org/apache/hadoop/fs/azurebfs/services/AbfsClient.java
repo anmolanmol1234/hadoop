@@ -222,8 +222,7 @@ public abstract class AbfsClient implements Closeable {
     this.renameResilience = abfsConfiguration.getRenameResilience();
     this.fileSystemId = abfsClientContext.getFileSystemId();
     this.abfsServiceType = abfsServiceType;
-    this.sessionManager =   new AbfsSessionManager(this);
-
+    this.sessionManager =   new AbfsSessionManager(this, abfsConfiguration);
     if (encryptionContextProvider != null) {
       this.encryptionContextProvider = encryptionContextProvider;
       // Version update needed to support x-ms-encryption-context header
@@ -312,6 +311,19 @@ public abstract class AbfsClient implements Closeable {
     LOG.trace("primaryUserGroup is {}", this.primaryUserGroup);
   }
 
+  /**
+   * @return the {@link AbfsSessionManager} owned by this client; never {@code null}.
+   */
+  public AbfsSessionManager getSessionManager() {
+    return sessionManager;
+  }
+
+  /**
+   * @return {@code true} if session authentication is enabled by configuration.
+   */
+  public boolean isSessionAuthEnabled() {
+    return abfsConfiguration.isSessionAuthEnabled();
+  }
 
   /**
    * Constructs an AbfsClient instance with all authentication and configuration options.
@@ -1837,5 +1849,13 @@ public abstract class AbfsClient implements Closeable {
         entryPath,
         entry.eTag(),
         encryptionContext);
+  }
+
+  /**
+   * @return the Azure Storage account name used for request signing and
+   *     canonical resource construction.
+   */
+  public String getAccountName() {
+    return accountName;
   }
 }

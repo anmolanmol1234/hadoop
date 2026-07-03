@@ -17,7 +17,8 @@
  */
 package org.apache.hadoop.fs.azurebfs.services;
 
-import java.util.Date;
+import java.time.Instant;
+import java.util.Objects;
 
 /**
  * Represents the credentials returned by the Azure Blob Storage
@@ -30,57 +31,47 @@ import java.util.Date;
  */
 public final class SessionCredentials {
 
-  /**
-   * Unique identifier for the session.
-   */
+  /** Unique identifier for the session. */
   private final String sessionId;
 
-  /**
-   * Session token used in the Authorization header.
-   */
+  /** Session token used in the Authorization header. */
   private final String sessionToken;
 
-  /**
-   * Session key used to generate request signatures.
-   */
-  private final String sessionKey;
+  /** Session key used to generate request signatures. */
+  private final byte[] sessionKey;
 
-  /**
-   * Authentication type associated with the session.
-   */
+  /** Authentication type associated with the session. */
   private final String authenticationType;
 
-  /**
-   * Session expiration time.
-   */
-  private final Date expiration;
+  /** Session expiration time. */
+  private final Instant expirationTime;
 
   /**
    * Constructs a SessionCredentials instance.
    *
-   * @param sessionId session identifier.
-   * @param sessionToken session token.
-   * @param sessionKey session key.
+   * @param sessionId          session identifier.
+   * @param sessionToken       session token.
+   * @param sessionKey         session key (defensive-copied).
    * @param authenticationType authentication type.
-   * @param expiration session expiration time.
+   * @param expirationTime     session expiration time.
    */
   public SessionCredentials(
       final String sessionId,
       final String sessionToken,
-      final String sessionKey,
+      final byte[] sessionKey,
       final String authenticationType,
-      final Date expiration) {
-    this.sessionId = sessionId;
-    this.sessionToken = sessionToken;
-    this.sessionKey = sessionKey;
-    this.authenticationType = authenticationType;
-    this.expiration = expiration;
+      final Instant expirationTime) {
+    this.sessionId = Objects.requireNonNull(sessionId, "sessionId");
+    this.sessionToken = Objects.requireNonNull(sessionToken, "sessionToken");
+    this.sessionKey = Objects.requireNonNull(sessionKey, "sessionKey").clone();
+    this.authenticationType = Objects.requireNonNull(
+        authenticationType, "authenticationType");
+    this.expirationTime = Objects.requireNonNull(
+        expirationTime, "expirationTime");
   }
 
   /**
    * Returns the session identifier.
-   *
-   * @return session identifier.
    */
   public String getSessionId() {
     return sessionId;
@@ -88,26 +79,21 @@ public final class SessionCredentials {
 
   /**
    * Returns the session token.
-   *
-   * @return session token.
    */
   public String getSessionToken() {
     return sessionToken;
   }
 
   /**
-   * Returns the session key.
-   *
-   * @return session key.
+   * Returns a defensive copy of the session key. Callers must not retain
+   * the returned array beyond the immediate signing operation.
    */
-  public String getSessionKey() {
-    return sessionKey;
+  public byte[] getSessionKey() {
+    return sessionKey.clone();
   }
 
   /**
    * Returns the session authentication type.
-   *
-   * @return authentication type.
    */
   public String getAuthenticationType() {
     return authenticationType;
@@ -115,10 +101,21 @@ public final class SessionCredentials {
 
   /**
    * Returns the session expiration time.
-   *
-   * @return session expiration time.
    */
-  public Date getExpiration() {
-    return expiration;
+  public Instant getExpirationTime() {
+    return expirationTime;
+  }
+
+  /**
+   * Returns a diagnostic string that intentionally omits the session key
+   * and session token to prevent secret leakage into logs.
+   */
+  @Override
+  public String toString() {
+    return "SessionCredentials{"
+        + "sessionId='" + sessionId + '\''
+        + ", authenticationType='" + authenticationType + '\''
+        + ", expirationTime=" + expirationTime
+        + '}';
   }
 }
