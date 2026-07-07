@@ -318,6 +318,7 @@ public final class FileSystemConfigurations {
   public static final int DEFAULT_FS_AZURE_SESSION_MAX_RETRY_COUNT = 3;
   public static final int DEFAULT_FS_AZURE_SESSION_RETRY_INTERVAL_SECONDS = 30;
   public static final boolean DEFAULT_FS_AZURE_SESSION_REQUEST_RETRY_ON_INVALID_SESSION = true;
+  public static final boolean DEFAULT_FS_AZURE_ALLOW_SHARED_KEY_SESSION_AUTH = false;
 
   private FileSystemConfigurations() {}
 }

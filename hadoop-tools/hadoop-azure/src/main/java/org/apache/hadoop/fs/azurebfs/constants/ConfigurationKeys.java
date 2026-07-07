@@ -83,6 +83,8 @@ public final class ConfigurationKeys {
   /** Master switch for Azure Blob Storage Session Authentication. */
   public static final String FS_AZURE_ENABLE_SESSION_AUTH = "fs.azure.enable.session.auth";
 
+  public static final String FS_AZURE_ALLOW_SHARED_KEY_SESSION_AUTH = "fs.azure.allow.shared.key.session.auth";
+
   /**
    * Time (seconds) before session expiration at which the driver proactively
    * refreshes the session.

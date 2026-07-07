@@ -692,6 +692,24 @@ public class AbfsConfiguration{
       DefaultValue = DEFAULT_FS_AZURE_SESSION_REQUEST_RETRY_ON_INVALID_SESSION)
   private boolean sessionRequestRetryOnInvalidSession;
 
+  @BooleanConfigurationValidatorAnnotation(
+      ConfigurationKey = FS_AZURE_ALLOW_SHARED_KEY_SESSION_AUTH,
+      DefaultValue = DEFAULT_FS_AZURE_ALLOW_SHARED_KEY_SESSION_AUTH)
+  private boolean allowSharedKeySessionAuth;
+
+  /**
+   * Test-only escape hatch: enables session authentication on SharedKey
+   * accounts for pre-OAuth testing. Production storage accounts require
+   * OAuth for Create Session; this config exists solely to unblock
+   * integration testing on accounts that do not yet have OAuth configured.
+   * MUST NOT be enabled in production.
+   *
+   * @return {@code true} if session auth is allowed on SharedKey accounts.
+   */
+  public boolean isSharedKeySessionAuthAllowed() {
+    return allowSharedKeySessionAuth;
+  }
+
   private String clientProvidedEncryptionKey;
   private String clientProvidedEncryptionKeySHA;
 

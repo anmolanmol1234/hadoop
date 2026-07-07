@@ -18,8 +18,11 @@
 
 package org.apache.hadoop.fs.azurebfs.services;
 
+import java.net.URL;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -27,7 +30,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.fs.azurebfs.AbfsConfiguration;
+import org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AzureBlobFileSystemException;
 import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
 
@@ -71,6 +76,13 @@ public class AbfsSessionManager {
   private final Duration fallbackDuration;
 
   /**
+   * Time source used for all expiry and fallback-window decisions.
+   * Injectable so unit tests can control simulated time without wall-clock
+   * sleeps. Production callers use {@link Clock#systemUTC()}.
+   */
+  private final Clock clock;
+
+  /**
    * Currently cached session credentials, or {@code null} if none exist,
    * the session was invalidated, or it has expired.
    */
@@ -100,7 +112,7 @@ public class AbfsSessionManager {
       new AtomicReference<>(Instant.EPOCH);
 
   /**
-   * Constructs a session manager for the given client.
+   * Constructs a session manager backed by the system UTC clock.
    *
    * @param client the owning {@link AbfsClient}.
    * @param configuration the ABFS configuration used to read session
@@ -108,7 +120,24 @@ public class AbfsSessionManager {
    */
   public AbfsSessionManager(final AbfsClient client,
       final AbfsConfiguration configuration) {
+    this(client, configuration, Clock.systemUTC());
+  }
+
+  /**
+   * Constructs a session manager backed by the supplied clock. Reserved
+   * for unit tests that need to control simulated time deterministically.
+   *
+   * @param client the owning {@link AbfsClient}.
+   * @param configuration the ABFS configuration used to read session
+   *     authentication settings.
+   * @param clock time source for expiry and fallback-window decisions.
+   */
+  @VisibleForTesting
+  AbfsSessionManager(final AbfsClient client,
+      final AbfsConfiguration configuration,
+      final Clock clock) {
     this.client = client;
+    this.clock = clock;
     this.enabled = configuration.isSessionAuthEnabled();
     this.refreshSkew = Duration.ofSeconds(
         configuration.getSessionRefreshThresholdSeconds());
@@ -125,6 +154,86 @@ public class AbfsSessionManager {
   }
 
   /**
+   * Returns whether the given operation is eligible for session-based
+   * authentication.
+   *
+   * <p>Session authentication is supported only for blob-level GET requests
+   * that do not include a {@code comp} query parameter. Operations that do
+   * not meet these requirements must use OAuth authentication.
+   *
+   * <p>An operation is eligible only if:
+   * <ul>
+   *   <li>The HTTP method is {@code GET}.</li>
+   *   <li>The request URL does not contain a {@code comp} query parameter.</li>
+   *   <li>The request targets a blob
+   *       ({@code /<container>/<blob>}), not a container.</li>
+   * </ul>
+   *
+   * @param op the operation to evaluate; may be {@code null}
+   * @return {@code true} if the operation supports session authentication;
+   *         {@code false} otherwise
+   */
+  @VisibleForTesting
+  static boolean supportsSession(final AbfsRestOperation op) {
+    if (op == null) {
+      return false;
+    }
+    // 1. Method must be GET or HEAD.
+    final String method = op.getMethod();
+    if (!AbfsHttpConstants.HTTP_METHOD_GET.equalsIgnoreCase(method)
+        && !AbfsHttpConstants.HTTP_METHOD_HEAD.equalsIgnoreCase(method)) {
+      return false;
+    }
+    final URL url = op.getUrl();
+    if (url == null) {
+      return false;
+    }
+    final String query = url.getQuery();
+    if (query != null && containsCompParam(query)) {
+      return false;
+    }
+    String path = url.getPath();
+    if (path == null || path.isEmpty()) {
+      return false;
+    }
+    if (path.charAt(0) == '/') {
+      path = path.substring(1);
+    }
+    final int slash = path.indexOf('/');
+    if (slash <= 0 || slash == path.length() - 1) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Returns whether the query string contains a {@code comp} parameter.
+   *
+   * <p>The parameter name is matched case-insensitively and only as a
+   * complete query parameter name, avoiding false positives such as
+   * {@code composed=...}.
+   *
+   * @param query the raw query string
+   * @return {@code true} if a {@code comp} parameter is present;
+   *         {@code false} otherwise
+   */
+  private static boolean containsCompParam(final String query) {
+    final String lower = query.toLowerCase(Locale.ROOT);
+    int idx = 0;
+    while (idx < lower.length()) {
+      final int hit = lower.indexOf("comp=", idx);
+      if (hit < 0) {
+        return false;
+      }
+      if (hit == 0 || lower.charAt(hit - 1) == '&') {
+        return true;
+      }
+      idx = hit + 1;
+    }
+    return false;
+  }
+
+  /**
    * Returns whether the given operation is eligible for session
    * authentication.
    *
@@ -132,8 +241,11 @@ public class AbfsSessionManager {
    * @return {@code true} if the operation may use session authentication.
    */
   public boolean isEligible(final AbfsRestOperation op) {
-    return enabled;
-  }
+      if (!enabled) {
+        return false;
+      }
+      return supportsSession(op);
+    }
 
   /**
    * Returns credentials suitable for signing an outgoing request, or
@@ -165,7 +277,7 @@ public class AbfsSessionManager {
     }
     final SessionKeyCredentials cached = activeSessionRef.get();
     final Instant expiry = activeSessionExpiryRef.get();
-    final Instant now = Instant.now();
+    final Instant now = clock.instant();
 
     if (cached != null && expiry != null && now.isBefore(expiry)) {
       if (needsRefresh(now, expiry)) {
@@ -200,7 +312,7 @@ public class AbfsSessionManager {
    * @return {@code true} if the OAuth-fallback window is still active.
    */
   private boolean inFallback() {
-    return Instant.now().isBefore(fallbackUntilRef.get());
+    return clock.instant().isBefore(fallbackUntilRef.get());
   }
 
   /**
@@ -209,7 +321,7 @@ public class AbfsSessionManager {
    * @param cause the failure that triggered the fallback.
    */
   private void enterFallback(final Throwable cause) {
-    final Instant until = Instant.now().plus(fallbackDuration);
+    final Instant until = clock.instant().plus(fallbackDuration);
     fallbackUntilRef.set(until);
     LOG.warn("Entering session authentication fallback window until {} "
         + "due to: {}", until, cause.toString());

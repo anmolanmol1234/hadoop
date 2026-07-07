@@ -44,6 +44,7 @@ import org.apache.hadoop.fs.azurebfs.utils.UriUtils;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.BLOCKLIST;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.EMPTY_STRING;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.EQUAL;
+import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.SESSION;
 import static org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants.TRUE;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X_MS_META_HDI_ISFOLDER;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpQueryParams.QUERY_PARAM_COMP;
@@ -78,6 +79,7 @@ public abstract class AbfsHttpOperation implements AbfsPerfLoggable {
   private String expectedAppendPos = "";
   private ListResultSchema listResultSchema = null;
   private InputStream listResultStream = null;
+  private InputStream sessionResultStream = null;
   private List<String> blockIdList = null;
 
   // metrics
@@ -221,6 +223,10 @@ public abstract class AbfsHttpOperation implements AbfsPerfLoggable {
 
   public ListResultSchema getListResultSchema() {
     return listResultSchema;
+  }
+
+  public InputStream getSessionResultStream() {
+    return sessionResultStream;
   }
 
   public InputStream getListResultStream() {
@@ -412,7 +418,12 @@ public abstract class AbfsHttpOperation implements AbfsPerfLoggable {
           } else {
             parseListPathResponse(stream);
           }
-        } else {
+        }  else if (AbfsHttpConstants.HTTP_METHOD_POST.equals(this.method)
+            && url.toString().contains(QUERY_PARAM_COMP + EQUAL + SESSION)) {
+          // Create Session: capture the response body for client-side XML parsing.
+          parseSessionResponse(stream);
+        }
+        else {
           if (buffer != null) {
             while (totalBytesRead < length) {
               int bytesRead = stream.read(buffer, offset + totalBytesRead,
@@ -522,6 +533,24 @@ public abstract class AbfsHttpOperation implements AbfsPerfLoggable {
         buffer.write(tempBuffer, 0, bytesRead);
       }
       listResultStream = new ByteArrayInputStream(buffer.toByteArray());
+    }
+  }
+
+  /**
+   * Parse the Create Session response from the network stream and save
+   * the response body into an in-memory buffer for later parsing.
+   */
+  private void parseSessionResponse(final InputStream stream) throws IOException {
+    if (stream == null || sessionResultStream != null) {
+      return;
+    }
+    try (ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+      byte[] tempBuffer = new byte[CLEAN_UP_BUFFER_SIZE];
+      int bytesRead;
+      while ((bytesRead = stream.read(tempBuffer, 0, CLEAN_UP_BUFFER_SIZE)) != -1) {
+        buffer.write(tempBuffer, 0, bytesRead);
+      }
+      sessionResultStream = new ByteArrayInputStream(buffer.toByteArray());
     }
   }
 

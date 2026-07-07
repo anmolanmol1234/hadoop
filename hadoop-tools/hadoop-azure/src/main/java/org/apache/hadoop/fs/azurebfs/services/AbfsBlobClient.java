@@ -177,6 +177,7 @@ import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X
 import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X_MS_PROPOSED_LEASE_ID;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X_MS_RANGE_GET_CONTENT_MD5;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X_MS_SOURCE_LEASE_ID;
+import static org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations.X_MS_TEST_ENABLE_KEY_BASED_AUTH_FOR_SESSION;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpQueryParams.QUERY_PARAM_BLOCKID;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpQueryParams.QUERY_PARAM_BLOCKLISTTYPE;
 import static org.apache.hadoop.fs.azurebfs.constants.HttpQueryParams.QUERY_PARAM_CLOSE;
@@ -2522,6 +2523,7 @@ public class AbfsBlobClient extends AbfsClient {
 
     requestHeaders.add(new AbfsHttpHeader(CONTENT_TYPE, APPLICATION_XML));
     requestHeaders.add(new AbfsHttpHeader(CONTENT_LENGTH, String.valueOf(requestBody.length)));
+    requestHeaders.add(new AbfsHttpHeader(X_MS_TEST_ENABLE_KEY_BASED_AUTH_FOR_SESSION, TRUE));
 
     // Build the query parameters for the Create Session API.
     final AbfsUriQueryBuilder queryBuilder = createDefaultUriQueryBuilder();
@@ -2539,8 +2541,6 @@ public class AbfsBlobClient extends AbfsClient {
             0,
             requestBody.length,
             null /* sasTokenForReuse - Create Session always uses OAuth, never SAS */);
-
-    op.setSessionAuthDisabledForOperation(true);
     op.execute(tracingContext);
     // Parse the response and return the session credentials.
     return parseCreateSessionResponse(op);
@@ -2553,8 +2553,11 @@ public class AbfsBlobClient extends AbfsClient {
    * @return {@link SessionCredentials} returned by the service.
    * @throws AzureBlobFileSystemException if the response cannot be parsed.
    */
-  private SessionCredentials parseCreateSessionResponse(final AbfsRestOperation op) throws AzureBlobFileSystemException {
-    try (InputStream stream = op.getResult().getContentInputStream()) {
+  SessionCredentials parseCreateSessionResponse(final AbfsRestOperation op) throws AzureBlobFileSystemException {
+    try (InputStream stream = op.getResult().getSessionResultStream()) {
+      if (stream == null) {
+        throw new AbfsDriverException(ERR_CREATE_SESSION_PARSING, new IOException("Create Session response body is empty"));
+      }
       DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
       Document document = factory.newDocumentBuilder().parse(stream);
       document.getDocumentElement().normalize();
@@ -2589,7 +2592,7 @@ public class AbfsBlobClient extends AbfsClient {
    * @return the parsed {@link Instant}.
    * @throws IOException if the value matches neither RFC 1123 nor ISO-8601.
    */
-  private static Instant parseExpiration(final String expiration)
+  static Instant parseExpiration(final String expiration)
       throws IOException {
     try {
       return ZonedDateTime.parse(expiration, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant();

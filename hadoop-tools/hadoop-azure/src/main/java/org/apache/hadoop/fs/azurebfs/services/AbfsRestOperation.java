@@ -692,6 +692,17 @@ public class AbfsRestOperation {
         break;
       case SharedKey:
       default:
+        if (shouldUseSessionAuth()
+            && client.getAbfsConfiguration().isSharedKeySessionAuthAllowed()) {
+          final SessionKeyCredentials sessionCredentials =
+              client.getSessionManager().getSessionCredentials(tracingContext);
+          if (sessionCredentials != null) {
+            LOG.debug("Signing request with session credentials (SharedKey test path)");
+            sessionCredentials.signRequest(httpOperation, bytesToSign);
+            signedWithSessionCreds = true;
+            break;
+          }
+        }
         // sign the HTTP request
         LOG.debug("Signing request with shared key");
         // sign the HTTP request
@@ -855,5 +866,9 @@ public class AbfsRestOperation {
 
   int getRetryCount() {
     return retryCount;
+  }
+
+  public String getMethod() {
+    return method;
   }
 }
