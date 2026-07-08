@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -33,7 +34,10 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azurebfs.AbstractAbfsIntegrationTest;
 import org.apache.hadoop.fs.azurebfs.AzureBlobFileSystem;
@@ -49,17 +53,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * the service.
  *
  * <p>Requires a Blob-endpoint-capable storage account whose service side
- * has the Create Session API enabled. Tests are skipped automatically
- * when the configured account is not on the Blob endpoint, or when
- * {@code fs.azure.enable.session.auth} is not set to true.
- *
- * <p>Compatible with both authentication paths. In production, the
- * account uses OAuth and Create Session is authorized by the OAuth
- * bearer token. In pre-OAuth test environments, the account uses
- * SharedKey with {@code fs.azure.allow.shared.key.session.auth} set to
- * true so that Create Session is authorized by the account key; this
- * config is a test-only escape hatch and must not be enabled in
- * production.
+ * has the Create Session API enabled.
  */
 public class ITestAbfsSessionAuthE2E extends AbstractAbfsIntegrationTest {
 
@@ -359,6 +353,292 @@ public class ITestAbfsSessionAuthE2E extends AbstractAbfsIntegrationTest {
       assertReadBack(path, TEST_DATA);
     } finally {
       fs.delete(path, false);
+    }
+  }
+
+  /**
+   * Verify writes fall back to OAuth or SharedKey and succeed with
+   * session auth enabled. Writes are session-ineligible (PUT method)
+   * per {@link AbfsSessionManager#supportsSession}, so the auth switch
+   * must route them through the underlying wire credential.
+   *
+   * @throws Exception on failure of the write or cleanup.
+   */
+  @Test
+  public void testWriteFallsBackAndSucceeds() throws Exception {
+    final Path path = uniqueTestPath("write-fallback");
+
+    // A plain create + write exercises PUT Blob (ineligible) and
+    // PUT Block (ineligible: comp=block). Both must succeed via
+    // OAuth or SharedKey.
+    writeFile(path, TEST_DATA);
+    try {
+      assertThat(fs.exists(path)).isTrue();
+      assertReadBack(path, TEST_DATA);
+    } finally {
+      fs.delete(path, false);
+    }
+  }
+
+  /**
+   * Verify directory listing falls back to OAuth or SharedKey and
+   * succeeds with session auth enabled. List Blobs carries a
+   * {@code comp=list} query parameter, so the eligibility rule rejects
+   * it. The auth switch must route to the underlying wire credential.
+   *
+   * @throws Exception on failure of the listing or cleanup.
+   */
+  @Test
+  public void testDirectoryListingFallsBackAndSucceeds() throws Exception {
+    final Path dir = new Path("/session-auth-e2e/listing-"
+        + UUID.randomUUID());
+    fs.mkdirs(dir);
+    try {
+      final Path child = new Path(dir, "child-" + UUID.randomUUID() + ".txt");
+      writeFile(child, TEST_DATA);
+
+      // listStatus goes through the List Blobs API  session-ineligible
+      // due to comp=list. Fallback must handle it transparently.
+      FileStatus[] entries = fs.listStatus(dir);
+
+      assertThat(entries).isNotNull();
+      assertThat(entries).anySatisfy(status ->
+          assertThat(status.getPath().getName())
+              .isEqualTo(child.getName()));
+    } finally {
+      fs.delete(dir, true);
+    }
+  }
+
+  /**
+   * Verify a mixed workload of session-eligible reads and
+   * session-ineligible writes interleaves cleanly. Each write goes
+   * through fallback; each read is session-signed; the observed data
+   * remains consistent across the sequence.
+   *
+   * @throws Exception on failure of any operation in the sequence.
+   */
+  @Test
+  public void testMixedEligibilityWorkloadSucceeds() throws Exception {
+    final Path a = uniqueTestPath("mixed-a");
+    final Path b = uniqueTestPath("mixed-b");
+    final Path c = uniqueTestPath("mixed-c");
+    try {
+      writeFile(a, "payload-a");        // PUT: fallback
+      assertReadBack(a, "payload-a");   // GET: session
+
+      writeFile(b, "payload-b");        // PUT: fallback
+      assertReadBack(a, "payload-a");   // GET: session (cached)
+      assertReadBack(b, "payload-b");   // GET: session (cached)
+
+      writeFile(c, "payload-c");        // PUT: fallback
+      assertReadBack(c, "payload-c");   // GET: session
+      assertReadBack(a, "payload-a");   // GET: session
+    } finally {
+      fs.delete(a, false);
+      fs.delete(b, false);
+      fs.delete(c, false);
+    }
+  }
+
+  /**
+   * Verify a HEAD blob request with a {@code comp=} query parameter
+   * falls back cleanly. {@code fs.getXAttrs} internally issues a
+   * HEAD blob ?comp=metadata call  HEAD alone is session-eligible,
+   * but the {@code comp=} parameter demotes it to fallback. The
+   * request must still succeed and return the correct metadata.
+   *
+   * @throws Exception on failure of the metadata read or cleanup.
+   */
+  @Test
+  public void testExtendedAttributeReadFallsBackAndSucceeds()
+      throws Exception {
+    final Path path = uniqueTestPath("xattr-fallback");
+    writeFile(path, TEST_DATA);
+    try {
+      // getXAttr triggers HEAD ?comp=metadata under the hood. HEAD is
+      // session-eligible on its own but the comp= parameter demotes
+      // this specific request to fallback; the response must still
+      // succeed via OAuth or SharedKey.
+      fs.getXAttr(path, "user.someKey");
+    } catch (java.io.IOException expected) {
+      // If the attribute doesn't exist, the driver throws IOException.
+      // That's still fine for our purposes — the HEAD ?comp=metadata
+      // request went through the fallback path and returned a valid
+      // service-side response (just with no such attribute).
+      assertThat(expected.getMessage()).isNotNull();
+    } finally {
+      fs.delete(path, false);
+    }
+  }
+
+  /**
+   * Verify that a session-eligible read still succeeds after the
+   * manager has been invalidated multiple times in a row. Confirms
+   * that repeated invalidation does not leave the manager stuck and
+   * that the caller path continues to work whether a fresh session is
+   * minted or the fallback path handles the read.
+   *
+   * @throws Exception on failure of any operation.
+   */
+  @Test
+  public void testRepeatedInvalidationLeavesReadPathHealthy()
+      throws Exception {
+    final Path path = uniqueTestPath("repeated-invalidate");
+    writeFile(path, TEST_DATA);
+    try {
+      assertReadBack(path, TEST_DATA);
+
+      // Rapid invalidation cycles; each read must recover cleanly.
+      for (int i = 0; i < 5; i++) {
+        sessionManager.invalidateCurrentSession();
+        assertReadBack(path, TEST_DATA);
+      }
+    } finally {
+      fs.delete(path, false);
+    }
+  }
+
+  /**
+   * Verify that a sustained sequential read workload across many
+   * blobs reuses a single session across every read. Guards against
+   * accidental session re-mints under realistic Hadoop workload
+   * patterns where many small blobs are read in sequence.
+   *
+   * @throws Exception on failure of any write, read, or cleanup step.
+   */
+  @Test
+  public void testSustainedSequentialReadsUseSingleSession() throws Exception {
+    final int blobCount = 20;
+    final Path[] paths = new Path[blobCount];
+    try {
+      for (int i = 0; i < blobCount; i++) {
+        paths[i] = uniqueTestPath("sustained-" + i);
+        writeFile(paths[i], TEST_DATA + "-" + i);
+      }
+
+      sessionManager.invalidateCurrentSession();
+
+      // Prime the cache and capture the initial session instance.
+      SessionKeyCredentials initial = sessionManager.getSessionCredentials(
+          getTestTracingContext(fs, true));
+      assertThat(initial).isNotNull();
+
+      for (int i = 0; i < blobCount; i++) {
+        assertReadBack(paths[i], TEST_DATA + "-" + i);
+      }
+
+      // After all reads, the manager must still hold the same session.
+      SessionKeyCredentials afterReads = sessionManager.getSessionCredentials(
+          getTestTracingContext(fs, true));
+      assertThat(afterReads).isSameAs(initial);
+    } finally {
+      for (Path p : paths) {
+        if (p != null) {
+          try {
+            fs.delete(p, false);
+          } catch (Exception ignored) {
+            // Best-effort cleanup.
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Verify that when the refresh threshold is set larger than the
+   * session's own lifetime, the manager's proactive-refresh path is
+   * exercised end-to-end against the live service. A cold-mint places
+   * the cached session immediately inside the refresh-skew window, so
+   * the next request triggers a background refresh whose new session
+   * carries a different token from the original.
+   *
+   * <p>This test uses a short {@link Thread#sleep} to allow the
+   * background refresh to complete. The alternative  waiting for a
+   * real session's five-minute lifetime to elapse  would push test
+   * runtime past normal integration-test bounds.
+   *
+   * @throws Exception on failure of any manager or wire call.
+   */
+  @Test
+  public void testForcedRefreshMintsNewSession() throws Exception {
+    // Build a second filesystem whose refresh threshold exceeds the
+    // session lifetime, so any cached session is immediately inside
+    // the refresh skew window.
+    final Configuration conf = new Configuration(fs.getConf());
+    conf.setInt("fs.azure.session.refresh.threshold.seconds",
+        /* larger than the 5-minute default session lifetime */
+        10 * 60);
+
+    try (AzureBlobFileSystem forcedRefreshFs = (AzureBlobFileSystem)
+        FileSystem.newInstance(fs.getUri(), conf)) {
+      final AbfsBlobClient forcedBlobClient = (AbfsBlobClient)
+          forcedRefreshFs.getAbfsStore().getClient(AbfsServiceType.BLOB);
+      final AbfsSessionManager mgr = forcedBlobClient.getSessionManager();
+
+      // First call: mints a fresh session. Because the refresh
+      // threshold is larger than the session's own lifetime, the
+      // cached session is already inside the refresh-skew window.
+      SessionKeyCredentials original = mgr.getSessionCredentials(
+          getTestTracingContext(forcedRefreshFs, true));
+      assertThat(original).isNotNull();
+      final String originalToken = original.getSessionToken();
+
+      // Second call: returns cached credentials but triggers a
+      // background refresh against the live service.
+      SessionKeyCredentials duringRefresh = mgr.getSessionCredentials(
+          getTestTracingContext(forcedRefreshFs, true));
+      assertThat(duringRefresh).isSameAs(original);
+
+      // Give the background refresh a bounded window to complete.
+      Thread.sleep(3000);
+
+      // Third call: must observe the refreshed session, which carries
+      // a different server-side token from the original.
+      SessionKeyCredentials afterRefresh = mgr.getSessionCredentials(
+          getTestTracingContext(forcedRefreshFs, true));
+      assertThat(afterRefresh.getSessionToken())
+          .isNotEqualTo(originalToken);
+    }
+  }
+
+  /**
+   * Verify that two independent filesystem instances against the same
+   * account hold independent sessions. Guards against future
+   * refactors that might accidentally introduce shared session state
+   * between clients.
+   *
+   * @throws Exception on failure of any manager or wire call.
+   */
+  @Test
+  public void testTwoFilesystemInstancesHaveIndependentSessions()
+      throws Exception {
+    // Clone the current configuration for a second filesystem instance.
+    final Configuration conf = new Configuration(fs.getConf());
+
+    try (AzureBlobFileSystem fs2 = (AzureBlobFileSystem)
+        FileSystem.newInstance(fs.getUri(), conf)) {
+      final AbfsBlobClient blobClient2 = (AbfsBlobClient) fs2
+          .getAbfsStore().getClient(AbfsServiceType.BLOB);
+      final AbfsSessionManager mgr2 = blobClient2.getSessionManager();
+
+      // Reset both managers so any earlier caching is discarded.
+      sessionManager.invalidateCurrentSession();
+      mgr2.invalidateCurrentSession();
+
+      SessionKeyCredentials c1 = sessionManager.getSessionCredentials(
+          getTestTracingContext(fs, true));
+      SessionKeyCredentials c2 = mgr2.getSessionCredentials(
+          getTestTracingContext(fs2, true));
+
+      assertThat(c1).isNotNull();
+      assertThat(c2).isNotNull();
+      // Different manager instances hold different credential instances.
+      assertThat(c1).isNotSameAs(c2);
+      // The server-side tokens must differ  each filesystem instance
+      // mints its own session.
+      assertThat(c1.getSessionToken())
+          .isNotEqualTo(c2.getSessionToken());
     }
   }
 

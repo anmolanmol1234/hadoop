@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
@@ -33,6 +34,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.fs.azurebfs.AbfsConfiguration;
 import org.apache.hadoop.fs.azurebfs.constants.AbfsHttpConstants;
+import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AbfsRestOperationException;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AzureBlobFileSystemException;
 import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
 
@@ -47,10 +49,20 @@ import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
  * failures, and coordinating concurrent create requests so that only one
  * Create Session call is issued at any point in time.
  *
- * <p>When Create Session fails, the manager enters a temporary
- * OAuth-fallback state during which {@link #getSessionCredentials(TracingContext)}
- * returns {@code null}, causing the caller to authenticate the request
- * using the existing OAuth flow.
+ * <p>Create Session is retried up to
+ * {@code fs.azure.session.max.retry.count} times on recoverable failures
+ * (5xx server errors, 408 request timeout, 429 rate limiting) before the
+ * manager enters the OAuth-fallback window. Non-recoverable failures
+ * (4xx client errors like {@code FeatureNotEnabled}) enter fallback
+ * immediately.
+ *
+ * <p>When Create Session fails permanently, the manager enters a
+ * temporary OAuth-fallback state during which
+ * {@link #getSessionCredentials(TracingContext)} returns {@code null},
+ * causing the caller to authenticate the request using the existing
+ * OAuth flow. Background-refresh failures that occur while a still-valid
+ * session remains cached do not arm the fallback window  the cache
+ * continues to serve requests until it truly expires.
  */
 public class AbfsSessionManager {
 
@@ -74,6 +86,21 @@ public class AbfsSessionManager {
    * {@code fs.azure.session.fallback.duration.seconds}.
    */
   private final Duration fallbackDuration;
+
+  /**
+   * Maximum number of retries after the initial Create Session attempt
+   * before the manager enters fallback. Corresponds to
+   * {@code fs.azure.session.max.retry.count}. A value of {@code 0}
+   * disables retries: exactly one attempt is made per Create Session
+   * cycle.
+   */
+  private final int maxRetryCount;
+
+  /**
+   * Delay between Create Session retry attempts. Corresponds to
+   * {@code fs.azure.session.retry.interval.seconds}.
+   */
+  private final Duration retryInterval;
 
   /**
    * Time source used for all expiry and fallback-window decisions.
@@ -143,6 +170,9 @@ public class AbfsSessionManager {
         configuration.getSessionRefreshThresholdSeconds());
     this.fallbackDuration = Duration.ofSeconds(
         configuration.getSessionFallbackDurationSeconds());
+    this.maxRetryCount = configuration.getSessionMaxRetryCount();
+    this.retryInterval = Duration.ofSeconds(
+        configuration.getSessionRetryIntervalSeconds());
   }
 
   /**
@@ -157,13 +187,14 @@ public class AbfsSessionManager {
    * Returns whether the given operation is eligible for session-based
    * authentication.
    *
-   * <p>Session authentication is supported only for blob-level GET requests
-   * that do not include a {@code comp} query parameter. Operations that do
-   * not meet these requirements must use OAuth authentication.
+   * <p>Session authentication is supported only for blob-level GET or
+   * HEAD requests that do not include a {@code comp} query parameter.
+   * Operations that do not meet these requirements must use OAuth
+   * authentication.
    *
    * <p>An operation is eligible only if:
    * <ul>
-   *   <li>The HTTP method is {@code GET}.</li>
+   *   <li>The HTTP method is {@code GET} or {@code HEAD}.</li>
    *   <li>The request URL does not contain a {@code comp} query parameter.</li>
    *   <li>The request targets a blob
    *       ({@code /<container>/<blob>}), not a container.</li>
@@ -241,11 +272,11 @@ public class AbfsSessionManager {
    * @return {@code true} if the operation may use session authentication.
    */
   public boolean isEligible(final AbfsRestOperation op) {
-      if (!enabled) {
-        return false;
-      }
-      return supportsSession(op);
+    if (!enabled) {
+      return false;
     }
+    return supportsSession(op);
+  }
 
   /**
    * Returns credentials suitable for signing an outgoing request, or
@@ -316,11 +347,33 @@ public class AbfsSessionManager {
   }
 
   /**
-   * Enters the OAuth-fallback window after a Create Session failure.
+   * Considers arming the OAuth-fallback window after a Create Session
+   * failure.
    *
-   * @param cause the failure that triggered the fallback.
+   * <p>If a still-valid cached session remains at the time of failure,
+   * the fallback window is not armed. Callers continue to serve cached
+   * credentials until the session truly expires. This preserves the
+   * best-effort contract of background refresh: a transient refresh
+   * failure does not demote user requests to OAuth while the cache is
+   * still usable.
+   *
+   * <p>Once the cached session actually expires, a blocking Create
+   * Session attempt is made; if that also fails, this method is called
+   * again with no valid cache  and the fallback window arms
+   * normally. Cold-cache failures always arm the window on the first
+   * failed attempt because there are no valid credentials to preserve.
+   *
+   * @param cause the failure that triggered the fallback consideration.
    */
   private void enterFallback(final Throwable cause) {
+    final SessionKeyCredentials cached = activeSessionRef.get();
+    final Instant expiry = activeSessionExpiryRef.get();
+    if (cached != null && expiry != null
+        && clock.instant().isBefore(expiry)) {
+      LOG.debug("Create Session failed but cached session remains valid "
+          + "until {}; not arming fallback window.", expiry, cause);
+      return;
+    }
     final Instant until = clock.instant().plus(fallbackDuration);
     fallbackUntilRef.set(until);
     LOG.warn("Entering session authentication fallback window until {} "
@@ -435,30 +488,31 @@ public class AbfsSessionManager {
   }
 
   /**
-   * Issues the Create Session call, caches the returned credentials, and
-   * returns a {@link SessionKeyCredentials} for request signing. On any
-   * failure the OAuth-fallback window is armed and the exception is
-   * rethrown.
+   * Issues the Create Session call with retry on recoverable failures,
+   * caches the returned credentials, and returns a
+   * {@link SessionKeyCredentials} for request signing.
+   *
+   * <p>Recoverable failures (5xx server errors, 408 request timeout,
+   * 429 rate limiting) are retried up to {@link #maxRetryCount} times
+   * with {@link #retryInterval} between attempts. Non-recoverable
+   * failures (4xx client errors) short-circuit the retry loop.
+   *
+   * <p>Once retries are exhausted or a non-recoverable failure occurs,
+   * the manager considers arming the OAuth-fallback window via
+   * {@link #enterFallback} and rethrows the last exception.
    *
    * @param tracingContext tracing context associated with the request.
    * @return session credentials returned by the Create Session API.
-   * @throws AzureBlobFileSystemException if Create Session fails.
+   * @throws AzureBlobFileSystemException if Create Session fails after
+   *     exhausting retries or on a non-recoverable failure.
    */
   private SessionKeyCredentials doCreateSession(
       final TracingContext tracingContext)
       throws AzureBlobFileSystemException {
 
     LOG.debug("Creating new Blob Storage session.");
-    final SessionCredentials sessionResponse;
-    try {
-      sessionResponse = client.createSession(tracingContext);
-    } catch (AzureBlobFileSystemException ex) {
-      enterFallback(ex);
-      throw ex;
-    } catch (RuntimeException ex) {
-      enterFallback(ex);
-      throw ex;
-    }
+    final SessionCredentials sessionResponse =
+        callCreateSessionWithRetry(tracingContext);
 
     final SessionKeyCredentials creds = new SessionKeyCredentials(
         client.getAccountName(),
@@ -472,5 +526,99 @@ public class AbfsSessionManager {
         creds.getSessionToken(), sessionResponse.getExpirationTime());
 
     return creds;
+  }
+
+  /**
+   * Executes {@code client.createSession(...)} with retry on
+   * recoverable failures. Mirrors the retry contract of the driver's
+   * OAuth token acquisition in {@code AzureADAuthenticator.getTokenCall}.
+   *
+   * <p>The total number of wire attempts is bounded by
+   * {@code maxRetryCount + 1}. Non-recoverable failures short-circuit
+   * the loop. Runtime exceptions propagate immediately without retry.
+   * Any final failure is passed to {@link #enterFallback}, which
+   * decides whether to arm the fallback window based on whether a
+   * still-valid cached session remains.
+   *
+   * @param tracingContext tracing context propagated to each attempt.
+   * @return the successful Create Session response.
+   * @throws AzureBlobFileSystemException if all attempts fail or a
+   *     non-recoverable failure occurs.
+   */
+  private SessionCredentials callCreateSessionWithRetry(
+      final TracingContext tracingContext)
+      throws AzureBlobFileSystemException {
+    final int maxAttempts = maxRetryCount + 1;
+    AzureBlobFileSystemException lastFailure = null;
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return client.createSession(tracingContext);
+      } catch (AbfsRestOperationException ex) {
+        lastFailure = ex;
+        if (!isRecoverable(ex) || attempt == maxAttempts) {
+          LOG.debug("Create Session attempt {}/{} failed with status {}: "
+              + "giving up.", attempt, maxAttempts, ex.getStatusCode(), ex);
+          enterFallback(ex);
+          throw ex;
+        }
+        LOG.debug("Create Session attempt {}/{} failed with status {}: "
+            + "retrying.", attempt, maxAttempts, ex.getStatusCode(), ex);
+        sleepBetweenRetries();
+      } catch (AzureBlobFileSystemException ex) {
+        // Non-REST driver exception (e.g. XML parse, network I/O wrap).
+        // Treat as recoverable up to the retry budget.
+        lastFailure = ex;
+        if (attempt == maxAttempts) {
+          LOG.debug("Create Session attempt {}/{} failed: giving up.",
+              attempt, maxAttempts, ex);
+          enterFallback(ex);
+          throw ex;
+        }
+        LOG.debug("Create Session attempt {}/{} failed: retrying.",
+            attempt, maxAttempts, ex);
+        sleepBetweenRetries();
+      } catch (RuntimeException ex) {
+        // Unexpected  do not retry; consider fallback and propagate.
+        enterFallback(ex);
+        throw ex;
+      }
+    }
+
+    // Unreachable the loop either returns on success or throws on the
+    // final attempt but the compiler requires a terminal statement.
+    throw lastFailure;
+  }
+
+  /**
+   * Whether an {@link AbfsRestOperationException} represents a
+   * recoverable failure worth retrying.
+   *
+   * <p>5xx server errors, 408 Request Timeout, and 429 Too Many Requests
+   * are recoverable. 4xx client errors are treated as permanent for
+   * this request (for example, {@code FeatureNotEnabled},
+   * {@code ContainerNotFound}, {@code InvalidQueryParameterValue}).
+   *
+   * @param ex the exception to classify.
+   * @return {@code true} if the failure is worth retrying.
+   */
+  private static boolean isRecoverable(final AbfsRestOperationException ex) {
+    final int status = ex.getStatusCode();
+    return status >= 500 || status == 408 || status == 429;
+  }
+
+  /**
+   * Sleeps for {@link #retryInterval} between Create Session retry
+   * attempts. Restores the interrupt flag if the sleep is interrupted.
+   */
+  private void sleepBetweenRetries() {
+    if (retryInterval.isZero() || retryInterval.isNegative()) {
+      return;
+    }
+    try {
+      TimeUnit.MILLISECONDS.sleep(retryInterval.toMillis());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
   }
 }

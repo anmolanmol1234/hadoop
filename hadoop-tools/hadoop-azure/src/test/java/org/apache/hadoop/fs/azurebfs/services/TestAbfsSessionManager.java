@@ -35,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import org.apache.hadoop.fs.azurebfs.AbfsConfiguration;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AbfsDriverException;
@@ -55,7 +56,8 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link AbfsSessionManager}: feature-gating, cache
  * behavior, invalidation, expiry, OAuth fallback, single-flight
- * concurrency, and time-sensitive behavior via injected {@link Clock}.
+ * concurrency, time-sensitive behavior via injected {@link Clock},
+ * and the {@code supportsSession} eligibility rule.
  */
 @Timeout(value = 30, unit = TimeUnit.SECONDS)
 public class TestAbfsSessionManager {
@@ -75,9 +77,11 @@ public class TestAbfsSessionManager {
   @Mock private AbfsRestOperation restOp;
 
   private AbfsSessionManager manager;
+  private AutoCloseable mocks;
 
   @BeforeEach
   public void setUp() {
+    mocks = MockitoAnnotations.openMocks(this);
     when(client.getAccountName()).thenReturn(ACCOUNT_NAME);
     when(configuration.isSessionAuthEnabled()).thenReturn(true);
     when(configuration.getSessionRefreshThresholdSeconds())
@@ -88,13 +92,11 @@ public class TestAbfsSessionManager {
   }
 
   @AfterEach
-  public void tearDown() {
-    // MockitoExtension resets state between tests; nothing else to clean up.
+  public void tearDown() throws Exception {
+    if (mocks != null) {
+      mocks.close();
+    }
   }
-
-  // =========================================================================
-  // Feature gate
-  // =========================================================================
 
   /** Disabled feature must short-circuit without calling the client. */
   @Test
@@ -102,24 +104,23 @@ public class TestAbfsSessionManager {
       throws Exception {
     when(configuration.isSessionAuthEnabled()).thenReturn(false);
     manager = new AbfsSessionManager(client, configuration);
-
     assertThat(manager.isEnabled()).isFalse();
     assertThat(manager.isEligible(restOp)).isFalse();
     assertThat(manager.getSessionCredentials(tracingContext)).isNull();
-
     verify(client, never()).createSession(any());
   }
 
   /** Enabled feature reports eligible for a plain operation. */
   @Test
-  public void testFeatureEnabledIsEligibleReturnsTrue() {
+  public void testFeatureEnabledIsEligibleReturnsTrue() throws Exception {
+    // Stub the URL/method so supportsSession classifies this as eligible.
+    when(restOp.getMethod()).thenReturn("GET");
+    when(restOp.getUrl()).thenReturn(
+        new URL("https://acct.blob.core.windows.net/mycontainer/myblob"));
+
     assertThat(manager.isEnabled()).isTrue();
     assertThat(manager.isEligible(restOp)).isTrue();
   }
-
-  // =========================================================================
-  // Cold cache -> create session
-  // =========================================================================
 
   /** First call fires exactly one Create Session. */
   @Test
@@ -146,10 +147,6 @@ public class TestAbfsSessionManager {
     assertThat(second).isSameAs(first);
     verify(client, times(1)).createSession(tracingContext);
   }
-
-  // =========================================================================
-  // Invalidation
-  // =========================================================================
 
   /** After invalidation the next call must re-create. */
   @Test
@@ -181,16 +178,11 @@ public class TestAbfsSessionManager {
 
   /** Invalidation on an empty cache is a silent no-op. */
   @Test
-  public void testInvalidateOnEmptyCacheIsNoOp()
-      throws AzureBlobFileSystemException {
+  public void testInvalidateOnEmptyCacheIsNoOp() throws AzureBlobFileSystemException {
     manager.invalidateCurrentSession();
 
     verify(client, never()).createSession(any());
   }
-
-  // =========================================================================
-  // Expiry
-  // =========================================================================
 
   /** Expired cached session triggers a fresh create. */
   @Test
@@ -205,9 +197,6 @@ public class TestAbfsSessionManager {
     verify(client, times(2)).createSession(tracingContext);
   }
 
-  // =========================================================================
-  // OAuth fallback on Create Session failure
-  // =========================================================================
 
   /** ABFS exception propagates and arms the fallback window. */
   @Test
@@ -253,10 +242,6 @@ public class TestAbfsSessionManager {
 
     verify(client, times(1)).createSession(tracingContext);
   }
-
-  // =========================================================================
-  // Single-flight concurrency
-  // =========================================================================
 
   /**
    * Single-flight invariant: N concurrent cold-cache callers must
@@ -476,10 +461,7 @@ public class TestAbfsSessionManager {
     assertThat(maxConcurrent.get()).isEqualTo(1);
   }
 
-  // =========================================================================
-// supportsSession — service-contract eligibility rule
-// =========================================================================
-
+  /** GET on a plain blob URL is eligible for session auth. */
   @Test
   public void testSupportsSessionAcceptsGetBlob() throws Exception {
     AbfsRestOperation op = mock(AbfsRestOperation.class);
@@ -490,16 +472,18 @@ public class TestAbfsSessionManager {
     assertThat(AbfsSessionManager.supportsSession(op)).isTrue();
   }
 
+  /** HEAD blob (GetBlobProperties) is eligible for session auth. */
   @Test
-  public void testSupportsSessionRejectsHead() throws Exception {
+  public void testSupportsSessionAcceptsHeadBlob() throws Exception {
     AbfsRestOperation op = mock(AbfsRestOperation.class);
     when(op.getMethod()).thenReturn("HEAD");
     when(op.getUrl()).thenReturn(
         new URL("https://acct.blob.core.windows.net/mycontainer/myblob"));
 
-    assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
+    assertThat(AbfsSessionManager.supportsSession(op)).isTrue();
   }
 
+  /** PUT blob (create/write) is rejected. */
   @Test
   public void testSupportsSessionRejectsPut() throws Exception {
     AbfsRestOperation op = mock(AbfsRestOperation.class);
@@ -510,6 +494,7 @@ public class TestAbfsSessionManager {
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
+  /** DELETE blob is rejected. */
   @Test
   public void testSupportsSessionRejectsDelete() throws Exception {
     AbfsRestOperation op = mock(AbfsRestOperation.class);
@@ -520,26 +505,53 @@ public class TestAbfsSessionManager {
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
+  /** POST (Create Session's request shape) is rejected. */
+  @Test
+  public void testSupportsSessionRejectsPost() throws Exception {
+    AbfsRestOperation op = mock(AbfsRestOperation.class);
+    when(op.getMethod()).thenReturn("POST");
+    when(op.getUrl()).thenReturn(new URL(
+        "https://acct.blob.core.windows.net/mycontainer"
+            + "?restype=container&comp=session"));
+
+    assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
+  }
+
+  /** GET blob ?comp=metadata is rejected. */
   @Test
   public void testSupportsSessionRejectsCompQueryParam() throws Exception {
     AbfsRestOperation op = mock(AbfsRestOperation.class);
     when(op.getMethod()).thenReturn("GET");
-    when(op.getUrl()).thenReturn(
-        new URL("https://acct.blob.core.windows.net/mycontainer/myblob?comp=metadata"));
+    when(op.getUrl()).thenReturn(new URL(
+        "https://acct.blob.core.windows.net/mycontainer/myblob?comp=metadata"));
 
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
+  /** HEAD blob ?comp=metadata is rejected (comp= trumps HEAD eligibility). */
+  @Test
+  public void testSupportsSessionRejectsHeadWithComp() throws Exception {
+    AbfsRestOperation op = mock(AbfsRestOperation.class);
+    when(op.getMethod()).thenReturn("HEAD");
+    when(op.getUrl()).thenReturn(new URL(
+        "https://acct.blob.core.windows.net/mycontainer/myblob?comp=metadata"));
+
+    assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
+  }
+
+  /** GET container ?comp=list is rejected. */
   @Test
   public void testSupportsSessionRejectsListContainer() throws Exception {
     AbfsRestOperation op = mock(AbfsRestOperation.class);
     when(op.getMethod()).thenReturn("GET");
-    when(op.getUrl()).thenReturn(
-        new URL("https://acct.blob.core.windows.net/mycontainer?restype=container&comp=list"));
+    when(op.getUrl()).thenReturn(new URL(
+        "https://acct.blob.core.windows.net/mycontainer"
+            + "?restype=container&comp=list"));
 
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
+  /** Container-only path is rejected. */
   @Test
   public void testSupportsSessionRejectsContainerOnlyPath() throws Exception {
     AbfsRestOperation op = mock(AbfsRestOperation.class);
@@ -550,6 +562,18 @@ public class TestAbfsSessionManager {
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
+  /** HEAD on container-only path is rejected. */
+  @Test
+  public void testSupportsSessionRejectsHeadContainer() throws Exception {
+    AbfsRestOperation op = mock(AbfsRestOperation.class);
+    when(op.getMethod()).thenReturn("HEAD");
+    when(op.getUrl()).thenReturn(
+        new URL("https://acct.blob.core.windows.net/mycontainer"));
+
+    assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
+  }
+
+  /** Root path is rejected. */
   @Test
   public void testSupportsSessionRejectsRoot() throws Exception {
     AbfsRestOperation op = mock(AbfsRestOperation.class);
@@ -560,19 +584,20 @@ public class TestAbfsSessionManager {
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
+  /** Null op is rejected without throwing. */
   @Test
   public void testSupportsSessionRejectsNullOp() {
     assertThat(AbfsSessionManager.supportsSession(null)).isFalse();
   }
 
+  /** comp= detector must not match "composed=" or other substrings. */
   @Test
   public void testSupportsSessionCompDetectionAvoidsFalsePositives()
       throws Exception {
     AbfsRestOperation op = mock(AbfsRestOperation.class);
     when(op.getMethod()).thenReturn("GET");
-    // "composed" contains the substring "comp" but is not the comp= key.
-    when(op.getUrl()).thenReturn(
-        new URL("https://acct.blob.core.windows.net/mycontainer/myblob?composed=xyz"));
+    when(op.getUrl()).thenReturn(new URL(
+        "https://acct.blob.core.windows.net/mycontainer/myblob?composed=xyz"));
 
     assertThat(AbfsSessionManager.supportsSession(op)).isTrue();
   }

@@ -642,7 +642,7 @@ class VectoredReadHandler {
             stream.getPath(), r.getOffset(), destOffset, length, left);
 
         if (left < 0) {
-          LOG.error("directRead: pending bytes went negative  possible duplicate write:"
+          LOG.error("directRead: pending bytes went negative possible duplicate write:"
                   + " path={}, rangeOffset={}, pending={}",
               stream.getPath(), r.getOffset(), left);
           future.completeExceptionally(new IllegalStateException(

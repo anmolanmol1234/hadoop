@@ -154,10 +154,6 @@ public class TestAbfsSessionSupportsSession {
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
-  // =========================================================================
-  // Rejected: comp= query parameter
-  // =========================================================================
-
   /** GET blob ?comp=metadata is rejected. */
   @Test
   public void testRejectsGetBlobWithCompMetadata() throws Exception {
@@ -194,10 +190,6 @@ public class TestAbfsSessionSupportsSession {
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
-  // =========================================================================
-  // Rejected: container-scoped paths
-  // =========================================================================
-
   /** Container-only path (no blob) is rejected. */
   @Test
   public void testRejectsContainerOnlyPath() throws Exception {
@@ -224,10 +216,6 @@ public class TestAbfsSessionSupportsSession {
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
-  // =========================================================================
-  // Null-safety
-  // =========================================================================
-
   /** Null operation is rejected without throwing. */
   @Test
   public void testRejectsNullOp() {
@@ -243,10 +231,6 @@ public class TestAbfsSessionSupportsSession {
 
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
-
-  // =========================================================================
-  // Helper
-  // =========================================================================
 
   private static AbfsRestOperation opFor(String method, String url)
       throws Exception {
