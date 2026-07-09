@@ -18,10 +18,12 @@
 
 package org.apache.hadoop.fs.azurebfs.services;
 
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +36,6 @@ import org.apache.hadoop.fs.azurebfs.constants.HttpHeaderConfigurations;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AbfsDriverException;
 import org.apache.hadoop.fs.azurebfs.utils.TracingContext;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -67,11 +68,8 @@ import static org.mockito.Mockito.when;
  *       session code and continue to sign requests as before.</li>
  * </ul>
  *
- * <p>Uses JUnit 5 with manual Mockito initialization
- * ({@link MockitoAnnotations#openMocks(Object)}) to avoid a dependency
- * on {@code mockito-junit-jupiter}.
  */
-@Timeout(value = 15, unit = TimeUnit.SECONDS)
+@Timeout(value = 15)
 public class TestAbfsRestOperationSessionAuth {
 
   private static final String OAUTH_HEADER = "Bearer test-oauth-token";
@@ -343,10 +341,6 @@ public class TestAbfsRestOperationSessionAuth {
     verify(sharedKeyCreds, never()).signRequest(any(), anyInt());
   }
 
-  // =========================================================================
-  // signRequest byte-length routing
-  // =========================================================================
-
   /**
    * Verify that the {@code bytesToSign} parameter is forwarded
    * verbatim to the session signer.
@@ -381,5 +375,154 @@ public class TestAbfsRestOperationSessionAuth {
     op.signRequest(httpOperation, 8192, tracingContext);
 
     verify(sharedKeyCreds, times(1)).signRequest(httpOperation, 8192);
+  }
+
+  /**
+   * Verify that {@code shouldUseSessionAuth} handles a null session
+   * manager returned from the client without throwing. Falls back to
+   * OAuth cleanly.
+   *
+   * @throws Exception on failure of the mocked call chain.
+   */
+  @Test
+  public void testSignRequestFallsBackToOAuthWhenSessionManagerIsNull()
+      throws Exception {
+    when(client.getAuthType()).thenReturn(AuthType.OAuth);
+    when(client.isSessionAuthEnabled()).thenReturn(true);
+    when(client.getSessionManager()).thenReturn(null);
+    when(client.getAccessToken()).thenReturn(OAUTH_HEADER);
+
+    op.signRequest(httpOperation, BYTES_TO_SIGN, tracingContext);
+
+    verify(httpOperation, times(1)).setRequestProperty(
+        HttpHeaderConfigurations.AUTHORIZATION, OAUTH_HEADER);
+  }
+
+  /**
+   * Verify that {@code setSessionAuthDisabledForOperation(true)}
+   * followed by {@code setSessionAuthDisabledForOperation(false)}
+   * restores the default eligibility path — the manager is again
+   * consulted for credentials.
+   *
+   * @throws Exception on failure of the mocked call chain.
+   */
+  @Test
+  public void testSessionAuthDisabledFlagCanBeToggledOff() throws Exception {
+    when(client.getAuthType()).thenReturn(AuthType.OAuth);
+    when(client.isSessionAuthEnabled()).thenReturn(true);
+    when(client.getSessionManager()).thenReturn(sessionManager);
+    when(sessionManager.isEligible(op)).thenReturn(true);
+    when(sessionManager.getSessionCredentials(tracingContext))
+        .thenReturn(sessionCreds);
+
+    op.setSessionAuthDisabledForOperation(true);
+    op.setSessionAuthDisabledForOperation(false);
+    op.signRequest(httpOperation, BYTES_TO_SIGN, tracingContext);
+
+    // Manager consulted → session credentials used.
+    verify(sessionCreds, times(1)).signRequest(httpOperation, BYTES_TO_SIGN);
+  }
+
+  /**
+   * Verify that {@code setSessionAuthDisabledForOperation(true)} called
+   * twice in a row remains equivalent to a single call — the flag is
+   * idempotent.
+   *
+   * @throws Exception on failure of the mocked call chain.
+   */
+  @Test
+  public void testSessionAuthDisabledFlagIsIdempotent() throws Exception {
+    when(client.getAuthType()).thenReturn(AuthType.OAuth);
+    when(client.isSessionAuthEnabled()).thenReturn(true);
+    when(client.getAccessToken()).thenReturn(OAUTH_HEADER);
+
+    op.setSessionAuthDisabledForOperation(true);
+    op.setSessionAuthDisabledForOperation(true);
+    op.setSessionAuthDisabledForOperation(true);
+    op.signRequest(httpOperation, BYTES_TO_SIGN, tracingContext);
+
+    // Manager still not consulted; OAuth path taken.
+    verify(sessionManager, never()).getSessionCredentials(any());
+    verify(httpOperation, times(1)).setRequestProperty(
+        HttpHeaderConfigurations.AUTHORIZATION, OAUTH_HEADER);
+  }
+
+  // =========================================================================
+// 401 retry hook — invalidation on session-signed request failure
+// =========================================================================
+
+  /**
+   * Verify that a 401 on a session-signed request triggers session
+   * invalidation and signals retry.
+   */
+  @Test
+  public void test401OnSessionSignedRequestTriggersInvalidateAndRetry()
+      throws Exception {
+    when(client.getAuthType()).thenReturn(AuthType.OAuth);
+    when(client.isSessionAuthEnabled()).thenReturn(true);
+    when(client.getSessionManager()).thenReturn(sessionManager);
+    when(sessionManager.isEligible(op)).thenReturn(true);
+    when(sessionManager.getSessionCredentials(tracingContext))
+        .thenReturn(sessionCreds);
+
+    op.signRequest(httpOperation, BYTES_TO_SIGN, tracingContext);
+
+    boolean shouldRetry = op.handleSessionInvalidation401(
+        HttpURLConnection.HTTP_UNAUTHORIZED);
+
+    Assertions.assertThat(shouldRetry).isTrue();
+    verify(sessionManager, times(1)).invalidateCurrentSession();
+  }
+
+  /** Verify that a second 401 on the same operation does not retry. */
+  @Test
+  public void testSecond401DoesNotTriggerSecondInvalidation()
+      throws Exception {
+    when(client.getAuthType()).thenReturn(AuthType.OAuth);
+    when(client.isSessionAuthEnabled()).thenReturn(true);
+    when(client.getSessionManager()).thenReturn(sessionManager);
+    when(sessionManager.isEligible(op)).thenReturn(true);
+    when(sessionManager.getSessionCredentials(tracingContext))
+        .thenReturn(sessionCreds);
+
+    op.signRequest(httpOperation, BYTES_TO_SIGN, tracingContext);
+
+    op.handleSessionInvalidation401(
+       HttpURLConnection.HTTP_UNAUTHORIZED);
+    boolean shouldRetry = op.handleSessionInvalidation401(
+        HttpURLConnection.HTTP_UNAUTHORIZED);
+
+    Assertions.assertThat(shouldRetry).isFalse();
+    verify(sessionManager, times(1)).invalidateCurrentSession();
+  }
+
+  /** Verify that 401 on a non-session-signed request does not invalidate. */
+  @Test
+  public void test401OnNonSessionSignedRequestDoesNotInvalidate()
+      throws Exception {
+    boolean shouldRetry = op.handleSessionInvalidation401(
+        java.net.HttpURLConnection.HTTP_UNAUTHORIZED);
+
+    Assertions.assertThat(shouldRetry).isFalse();
+    verify(sessionManager, never()).invalidateCurrentSession();
+  }
+
+  /** Verify that non-401 statuses do not trigger the hook. */
+  @Test
+  public void testNon401StatusDoesNotTriggerHook() throws Exception {
+    when(client.getAuthType()).thenReturn(AuthType.OAuth);
+    when(client.isSessionAuthEnabled()).thenReturn(true);
+    when(client.getSessionManager()).thenReturn(sessionManager);
+    when(sessionManager.isEligible(op)).thenReturn(true);
+    when(sessionManager.getSessionCredentials(tracingContext))
+        .thenReturn(sessionCreds);
+
+    op.signRequest(httpOperation, BYTES_TO_SIGN, tracingContext);
+
+    Assertions.assertThat(op.handleSessionInvalidation401(200)).isFalse();
+    Assertions.assertThat(op.handleSessionInvalidation401(403)).isFalse();
+    Assertions.assertThat(op.handleSessionInvalidation401(500)).isFalse();
+
+    verify(sessionManager, never()).invalidateCurrentSession();
   }
 }

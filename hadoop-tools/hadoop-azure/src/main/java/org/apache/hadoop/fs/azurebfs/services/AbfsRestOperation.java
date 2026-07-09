@@ -518,18 +518,7 @@ public class AbfsRestOperation {
 
       int status = httpOperation.getStatusCode();
 
-      if (status == HttpURLConnection.HTTP_UNAUTHORIZED
-          && signedWithSessionCreds
-          && !retriedAfterSessionInvalidation) {
-        LOG.debug("Received 401 on a session-signed request; invalidating "
-            + "cached session and retrying once.");
-        client.getSessionManager().invalidateCurrentSession();
-        retriedAfterSessionInvalidation = true;
-        // Reset the session-sign marker so the retry attempt is judged on
-        // its own outcome. The next attempt will either mint a fresh
-        // session or, if Create Session enters fallback, use OAuth.
-        signedWithSessionCreds = false;
-        // Signal retry to the existing retry loop.
+      if (handleSessionInvalidation401(status)) {
         return false;
       }
 
@@ -841,6 +830,42 @@ public class AbfsRestOperation {
         || INGRESS_LIMIT_BREACH_ABBREVIATION.equals(failureReason) // Case 4.a
         || EGRESS_LIMIT_BREACH_ABBREVIATION.equals(failureReason) // Case 4.b
         || TPS_LIMIT_BREACH_ABBREVIATION.equals(failureReason); // Case 4.c
+  }
+
+  /**
+   * Handles the session-invalidation retry contract when a
+   * session-signed request receives HTTP 401.
+   *
+   * <p>A 401 on a session-signed request indicates the cached session
+   * has been rejected server-side (revocation, expiry drift, backend
+   * failover, etc.). The driver responds by invalidating the manager's
+   * cached session and signaling a one-shot retry that will either
+   * mint a fresh session or drop to OAuth fallback.
+   *
+   * <p>Fires only when all three preconditions hold: the status is
+   * exactly 401, the current attempt was signed with session
+   * credentials, and this operation has not already retried after a
+   * prior session invalidation. Bounds the driver to at most one
+   * session-invalidation retry per operation.
+   *
+   * @param statusCode the HTTP status code observed on the response.
+   * @return {@code true} if the operation should be retried;
+   *     {@code false} otherwise.
+   */
+  @VisibleForTesting
+  boolean handleSessionInvalidation401(final int statusCode) {
+    if (statusCode != HttpURLConnection.HTTP_UNAUTHORIZED
+        || !signedWithSessionCreds
+        || retriedAfterSessionInvalidation) {
+      return false;
+    }
+    LOG.debug("Received 401 on a session-signed request; invalidating "
+        + "cached session and retrying once.");
+    client.getSessionManager().invalidateCurrentSession();
+    retriedAfterSessionInvalidation = true;
+    // Reset so the retry attempt's outcome is judged on its own merits.
+    signedWithSessionCreds = false;
+    return true;
   }
 
   /**

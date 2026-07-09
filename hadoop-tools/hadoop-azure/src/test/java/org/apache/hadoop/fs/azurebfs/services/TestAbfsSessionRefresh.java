@@ -25,6 +25,7 @@ import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -580,6 +581,113 @@ public class TestAbfsSessionRefresh {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
+  }
+
+  // =========================================================================
+// Concurrent invalidation + refresh interleaving
+// =========================================================================
+
+  /**
+   * Verify that when invalidation runs while a background refresh is
+   * in flight, the manager reaches a stable state without deadlock.
+   * Either the refresh completes or the invalidation wins — both are
+   * valid outcomes, and the subsequent request must succeed cleanly.
+   */
+  @Test
+  public void testInvalidateDuringRefreshReachesStableState()
+      throws Exception {
+    final Instant t0 = Instant.parse("2026-07-02T10:00:00Z");
+    final Instant firstExpiry = t0.plusSeconds(300);
+    final Instant insideSkew = firstExpiry.minusSeconds(30);
+    final Instant secondExpiry = insideSkew.plusSeconds(300);
+
+    final Semaphore holdRefresh = new Semaphore(0);
+    final CountDownLatch refreshStarted = new CountDownLatch(1);
+    final AtomicInteger callCount = new AtomicInteger();
+
+    doAnswer(inv -> {
+      int n = callCount.incrementAndGet();
+      if (n == 1) {
+        return newSession("token-original", firstExpiry);
+      }
+      refreshStarted.countDown();
+      holdRefresh.acquire();
+      return newSession("token-refreshed-" + n, secondExpiry);
+    }).when(client).createSession(any());
+
+    MutableClock clock = new MutableClock(t0);
+    AbfsSessionManager mgr =
+        new AbfsSessionManager(client, configuration, clock);
+
+    mgr.getSessionCredentials(tracingContext);
+    clock.setTo(insideSkew);
+    mgr.getSessionCredentials(tracingContext);
+
+    assertThat(refreshStarted.await(2, TimeUnit.SECONDS)).isTrue();
+    mgr.invalidateCurrentSession();
+    holdRefresh.release();
+    Thread.sleep(200);
+
+    SessionKeyCredentials afterRace =
+        mgr.getSessionCredentials(tracingContext);
+    assertThat(afterRace).isNotNull();
+    assertThat(afterRace.getSessionToken()).startsWith("token-");
+  }
+
+  /**
+   * Verify that concurrent invalidation and get calls make forward
+   * progress: no deadlocks, no unhandled exceptions, every get returns
+   * a definite result.
+   */
+  @Test
+  public void testConcurrentInvalidateAndGetCallsMakeForwardProgress()
+      throws Exception {
+    final Instant expiry = Instant.now().plusSeconds(300);
+    when(client.createSession(any()))
+        .thenAnswer(inv -> newSession("token-cycle", expiry));
+
+    AbfsSessionManager mgr =
+        new AbfsSessionManager(client, configuration);
+
+    final int workerThreads = 16;
+    final int iterations = 50;
+    final java.util.concurrent.CyclicBarrier startBarrier =
+        new java.util.concurrent.CyclicBarrier(workerThreads);
+    final AtomicInteger definedResults = new AtomicInteger();
+    final AtomicReference<Throwable> firstError = new AtomicReference<>();
+
+    ExecutorService pool = daemonPool(workerThreads, "race");
+    try {
+      CountDownLatch done = new CountDownLatch(workerThreads);
+      for (int i = 0; i < workerThreads; i++) {
+        final boolean isInvalidator = i % 2 == 0;
+        pool.submit(() -> {
+          try {
+            startBarrier.await();
+            for (int j = 0; j < iterations; j++) {
+              if (isInvalidator) {
+                mgr.invalidateCurrentSession();
+              } else {
+                mgr.getSessionCredentials(tracingContext);
+                definedResults.incrementAndGet();
+              }
+            }
+          } catch (Throwable t) {
+            firstError.compareAndSet(null, t);
+          } finally {
+            done.countDown();
+          }
+        });
+      }
+
+      assertThat(done.await(20, TimeUnit.SECONDS)).isTrue();
+    } finally {
+      shutdownPool(pool);
+    }
+
+    assertThat(firstError.get()).isNull();
+    assertThat(definedResults.get())
+        .isEqualTo(iterations * (workerThreads / 2));
   }
 
   /**

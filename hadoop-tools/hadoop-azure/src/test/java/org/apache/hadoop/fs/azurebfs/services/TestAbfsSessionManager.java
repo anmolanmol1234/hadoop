@@ -612,10 +612,6 @@ public class TestAbfsSessionManager {
     assertThat(AbfsSessionManager.supportsSession(op)).isTrue();
   }
 
-  // =========================================================================
-  // Helpers
-  // =========================================================================
-
   private static SessionCredentials newSession(Instant expiration) {
     return new SessionCredentials(SESSION_ID, SESSION_TOKEN,
         SESSION_KEY, AUTH_TYPE, expiration);
@@ -690,5 +686,218 @@ public class TestAbfsSessionManager {
     public Clock withZone(final ZoneId zone) {
       return this;
     }
+  }
+
+  /**
+   * Verify that a zero refresh threshold does not cause the manager
+   * to trigger a refresh on every request. With a threshold of zero,
+   * only requests strictly at expiry would be inside the refresh
+   * window — normal cached reads must not spawn a refresh.
+   *
+   * @throws Exception on failure of the mocked call chain.
+   */
+  @Test
+  public void testZeroRefreshThresholdDoesNotTriggerRefreshOnEveryCall()
+      throws Exception {
+    when(configuration.getSessionRefreshThresholdSeconds()).thenReturn(0);
+
+    when(client.createSession(any()))
+        .thenReturn(newSession(Instant.now().plusSeconds(300)));
+
+    AbfsSessionManager mgr =
+        new AbfsSessionManager(client, configuration);
+
+    mgr.getSessionCredentials(tracingContext);
+    mgr.getSessionCredentials(tracingContext);
+    mgr.getSessionCredentials(tracingContext);
+
+    // With zero skew, refresh only triggers at/after expiry — cached
+    // reads within the session lifetime issue exactly one create.
+    verify(client, times(1)).createSession(any());
+  }
+
+  /**
+   * Verify that a zero fallback duration allows the manager to retry
+   * Create Session immediately after a failure, without any cool-off.
+   *
+   * @throws Exception on failure of the mocked call chain.
+   */
+  @Test
+  public void testZeroFallbackDurationAllowsImmediateRetry()
+      throws Exception {
+    when(configuration.getSessionFallbackDurationSeconds()).thenReturn(0);
+    when(configuration.getSessionMaxRetryCount()).thenReturn(0);
+
+    when(client.createSession(any()))
+        .thenThrow(new AbfsDriverException("boom",
+            new RuntimeException("fail")))
+        .thenReturn(newSession(Instant.now().plusSeconds(300)));
+
+    AbfsSessionManager mgr =
+        new AbfsSessionManager(client, configuration);
+
+    try {
+      mgr.getSessionCredentials(tracingContext);
+    } catch (AzureBlobFileSystemException ignored) {
+      // Expected on the first attempt.
+    }
+
+    // With zero fallback duration, the second call retries immediately.
+    SessionKeyCredentials creds =
+        mgr.getSessionCredentials(tracingContext);
+    assertThat(creds).isNotNull();
+    verify(client, times(2)).createSession(any());
+  }
+
+  /**
+   * Verify that a very large refresh threshold — larger than the
+   * session's own lifetime — causes every request to be inside the
+   * refresh-skew window and triggers proactive refreshes.
+   *
+   * @throws Exception on failure of the mocked call chain.
+   */
+  @Test
+  public void testHugeRefreshThresholdTriggersRefreshImmediately()
+      throws Exception {
+    when(configuration.getSessionRefreshThresholdSeconds())
+        .thenReturn(10 * 60);   // 600s, larger than 300s expiry
+
+    when(client.createSession(any()))
+        .thenReturn(newSession(Instant.now().plusSeconds(300)));
+
+    AbfsSessionManager mgr =
+        new AbfsSessionManager(client, configuration);
+
+    mgr.getSessionCredentials(tracingContext);
+    // Give the background refresh a bounded window to fire.
+    mgr.getSessionCredentials(tracingContext);
+    Thread.sleep(100);
+
+    // First call mints; second call triggers a background refresh
+    // because the cached session is already inside the skew window.
+    verify(client, org.mockito.Mockito.atLeast(2)).createSession(any());
+  }
+
+  // =========================================================================
+// Construction and misconfiguration edge cases
+// =========================================================================
+
+  /**
+   * Verify that constructing the manager against every plausible
+   * auth type never throws. Session auth is layered on OAuth in
+   * production, but a driver initialized against SharedKey or SAS
+   * accounts must not blow up just because the feature flag is set.
+   */
+  @Test
+  public void testConstructionSucceedsForEveryAuthType() throws Exception {
+    when(configuration.isSessionAuthEnabled()).thenReturn(true);
+
+    for (AuthType authType : AuthType.values()) {
+      when(client.getAuthType()).thenReturn(authType);
+      org.assertj.core.api.Assertions.assertThatCode(
+              () -> new AbfsSessionManager(client, configuration))
+          .as("Construction must succeed for authType=" + authType)
+          .doesNotThrowAnyException();
+    }
+  }
+
+  /**
+   * Verify that when session auth is disabled by configuration, the
+   * manager constructs cleanly with all session getters at zero.
+   */
+  @Test
+  public void testConstructionSucceedsWhenDisabledWithZeroConfig()
+      throws Exception {
+    when(configuration.isSessionAuthEnabled()).thenReturn(false);
+    when(configuration.getSessionRefreshThresholdSeconds()).thenReturn(0);
+    when(configuration.getSessionFallbackDurationSeconds()).thenReturn(0);
+
+    AbfsSessionManager mgr =
+        new AbfsSessionManager(client, configuration);
+
+    assertThat(mgr.isEnabled()).isFalse();
+    assertThat(mgr.getSessionCredentials(tracingContext)).isNull();
+    verify(client, never()).createSession(any());
+  }
+
+  /**
+   * Verify that a null operation passed to isEligible does not throw
+   * and returns false.
+   */
+  @Test
+  public void testEligibilityHandlesNullOperation() {
+    assertThat(manager.isEligible(null)).isFalse();
+  }
+
+  /**
+   * Verify that a disabled feature flag beats every other config —
+   * eligible operation, valid client, healthy Create Session all get
+   * ignored because the flag is off.
+   */
+  @Test
+  public void testDisabledFeatureFlagOverridesEverythingElse()
+      throws Exception {
+    when(configuration.isSessionAuthEnabled()).thenReturn(false);
+    when(client.createSession(any()))
+        .thenReturn(newSession(Instant.now().plusSeconds(300)));
+
+    AbfsSessionManager mgr =
+        new AbfsSessionManager(client, configuration);
+    when(restOp.getMethod()).thenReturn("GET");
+    when(restOp.getUrl()).thenReturn(
+        new java.net.URL(
+            "https://acct.blob.core.windows.net/mycontainer/myblob"));
+
+    assertThat(mgr.getSessionCredentials(tracingContext)).isNull();
+    assertThat(mgr.isEligible(restOp)).isFalse();
+    verify(client, never()).createSession(any());
+  }
+
+  /**
+   * Verify that a huge refresh threshold — larger than the session
+   * lifetime — does not block the caller. Cached credentials are
+   * served immediately on the calling thread while the background
+   * refresh runs.
+   */
+  @Test
+  public void testHugeRefreshThresholdDoesNotBlockCaller() throws Exception {
+    when(configuration.getSessionRefreshThresholdSeconds())
+        .thenReturn(10 * 60);
+    when(client.createSession(any()))
+        .thenReturn(newSession(Instant.now().plusSeconds(300)));
+
+    AbfsSessionManager mgr =
+        new AbfsSessionManager(client, configuration);
+
+    SessionKeyCredentials first =
+        mgr.getSessionCredentials(tracingContext);
+    SessionKeyCredentials second =
+        mgr.getSessionCredentials(tracingContext);
+
+    assertThat(first).isNotNull();
+    assertThat(second).isSameAs(first);
+  }
+
+  /**
+   * Verify that a zero-second fallback duration lets the manager
+   * retry Create Session on the next call after a failure. Guards
+   * against a 0 config producing infinite cool-off.
+   */
+  @Test
+  public void testZeroFallbackDurationPermitsImmediateRetry()
+      throws Exception {
+    when(configuration.getSessionFallbackDurationSeconds()).thenReturn(0);
+    when(client.createSession(any()))
+        .thenThrow(new RuntimeException("first fails"))
+        .thenReturn(newSession(Instant.now().plusSeconds(300)));
+
+    AbfsSessionManager mgr =
+        new AbfsSessionManager(client, configuration);
+
+    assertThat(mgr.getSessionCredentials(tracingContext)).isNull();
+
+    SessionKeyCredentials creds =
+        mgr.getSessionCredentials(tracingContext);
+    assertThat(creds).isNotNull();
   }
 }
