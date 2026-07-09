@@ -289,7 +289,7 @@ public class TestAbfsRestOperationSessionAuth {
             "Create Session failed",
             new RuntimeException("boom")));
 
-    assertThatThrownBy(() ->
+    Assertions.assertThatThrownBy(() ->
         op.signRequest(httpOperation, BYTES_TO_SIGN, tracingContext))
         .isInstanceOf(AbfsDriverException.class);
 
