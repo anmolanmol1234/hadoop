@@ -26,6 +26,7 @@ import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,6 +59,7 @@ import static org.mockito.Mockito.when;
  * behavior, invalidation, expiry, OAuth fallback, single-flight
  * concurrency, time-sensitive behavior via injected {@link Clock},
  * and the {@code supportsSession} eligibility rule.
+ *
  */
 @Timeout(value = 30, unit = TimeUnit.SECONDS)
 public class TestAbfsSessionManager {
@@ -88,6 +90,8 @@ public class TestAbfsSessionManager {
         .thenReturn(REFRESH_THRESHOLD_SECONDS);
     when(configuration.getSessionFallbackDurationSeconds())
         .thenReturn(FALLBACK_DURATION_SECONDS);
+    when(configuration.getSessionMaxRetryCount()).thenReturn(0);
+    when(configuration.getSessionRetryIntervalSeconds()).thenReturn(0);
     manager = new AbfsSessionManager(client, configuration);
   }
 
@@ -104,9 +108,11 @@ public class TestAbfsSessionManager {
       throws Exception {
     when(configuration.isSessionAuthEnabled()).thenReturn(false);
     manager = new AbfsSessionManager(client, configuration);
+
     assertThat(manager.isEnabled()).isFalse();
     assertThat(manager.isEligible(restOp)).isFalse();
     assertThat(manager.getSessionCredentials(tracingContext)).isNull();
+
     verify(client, never()).createSession(any());
   }
 
@@ -178,7 +184,8 @@ public class TestAbfsSessionManager {
 
   /** Invalidation on an empty cache is a silent no-op. */
   @Test
-  public void testInvalidateOnEmptyCacheIsNoOp() throws AzureBlobFileSystemException {
+  public void testInvalidateOnEmptyCacheIsNoOp()
+      throws AzureBlobFileSystemException {
     manager.invalidateCurrentSession();
 
     verify(client, never()).createSession(any());
@@ -196,7 +203,6 @@ public class TestAbfsSessionManager {
 
     verify(client, times(2)).createSession(tracingContext);
   }
-
 
   /** ABFS exception propagates and arms the fallback window. */
   @Test
@@ -262,39 +268,41 @@ public class TestAbfsSessionManager {
       return response;
     }).when(client).createSession(any());
 
-    ExecutorService pool = Executors.newFixedThreadPool(threadCount);
-    CountDownLatch done = new CountDownLatch(threadCount);
-    AtomicReference<SessionKeyCredentials> observed = new AtomicReference<>();
-    AtomicInteger nonNullResults = new AtomicInteger(0);
+    ExecutorService pool = daemonPool(threadCount, "single-flight");
+    try {
+      CountDownLatch done = new CountDownLatch(threadCount);
+      AtomicReference<SessionKeyCredentials> observed = new AtomicReference<>();
+      AtomicInteger nonNullResults = new AtomicInteger(0);
 
-    for (int i = 0; i < threadCount; i++) {
-      pool.submit(() -> {
-        try {
-          startGate.await();
-          SessionKeyCredentials c =
-              manager.getSessionCredentials(tracingContext);
-          if (c != null) {
-            observed.compareAndSet(null, c);
-            nonNullResults.incrementAndGet();
+      for (int i = 0; i < threadCount; i++) {
+        pool.submit(() -> {
+          try {
+            startGate.await();
+            SessionKeyCredentials c =
+                manager.getSessionCredentials(tracingContext);
+            if (c != null) {
+              observed.compareAndSet(null, c);
+              nonNullResults.incrementAndGet();
+            }
+          } catch (Exception ignored) {
+            // Failures counted only via createCount; asserted below.
+          } finally {
+            done.countDown();
           }
-        } catch (Exception ignored) {
-          // Failures counted only via createCount; asserted below.
-        } finally {
-          done.countDown();
-        }
-      });
+        });
+      }
+
+      startGate.countDown();
+      Thread.sleep(50);
+      inFlight.countDown();
+
+      assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+      assertThat(createCount.get()).isEqualTo(1);
+      assertThat(nonNullResults.get()).isEqualTo(threadCount);
+      verify(client, times(1)).createSession(any());
+    } finally {
+      shutdownPool(pool);
     }
-
-    startGate.countDown();
-    Thread.sleep(50);
-    inFlight.countDown();
-
-    assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
-    pool.shutdown();
-
-    assertThat(createCount.get()).isEqualTo(1);
-    assertThat(nonNullResults.get()).isEqualTo(threadCount);
-    verify(client, times(1)).createSession(any());
   }
 
   /** Concurrent invalidation followed by a get must trigger a re-create. */
@@ -307,25 +315,24 @@ public class TestAbfsSessionManager {
 
     manager.getSessionCredentials(tracingContext);
 
-    ExecutorService pool = Executors.newFixedThreadPool(4);
-    CountDownLatch done = new CountDownLatch(4);
-    for (int i = 0; i < 4; i++) {
-      pool.submit(() -> {
-        manager.invalidateCurrentSession();
-        done.countDown();
-      });
+    ExecutorService pool = daemonPool(4, "invalidate");
+    try {
+      CountDownLatch done = new CountDownLatch(4);
+      for (int i = 0; i < 4; i++) {
+        pool.submit(() -> {
+          manager.invalidateCurrentSession();
+          done.countDown();
+        });
+      }
+      assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
+    } finally {
+      shutdownPool(pool);
     }
-    assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
-    pool.shutdown();
 
     manager.getSessionCredentials(tracingContext);
 
     verify(client, times(2)).createSession(any());
   }
-
-  // =========================================================================
-  // Time-sensitive behavior (via injected Clock)
-  // =========================================================================
 
   /**
    * Inside the refresh-skew window, cached credentials are returned to the
@@ -432,25 +439,28 @@ public class TestAbfsSessionManager {
     testClock.setTo(insideSkew);
 
     final int callerThreads = 16;
-    ExecutorService pool = Executors.newFixedThreadPool(callerThreads);
-    CountDownLatch startGate = new CountDownLatch(1);
-    CountDownLatch done = new CountDownLatch(callerThreads);
-    for (int i = 0; i < callerThreads; i++) {
-      pool.submit(() -> {
-        try {
-          startGate.await();
-          assertThat(mgr.getSessionCredentials(tracingContext)).isNotNull();
-        } catch (Exception ignored) {
-          // Failure surfaces via the assertions below.
-        } finally {
-          done.countDown();
-        }
-      });
-    }
-    startGate.countDown();
+    ExecutorService pool = daemonPool(callerThreads, "refresh-flight");
+    try {
+      CountDownLatch startGate = new CountDownLatch(1);
+      CountDownLatch done = new CountDownLatch(callerThreads);
+      for (int i = 0; i < callerThreads; i++) {
+        pool.submit(() -> {
+          try {
+            startGate.await();
+            assertThat(mgr.getSessionCredentials(tracingContext)).isNotNull();
+          } catch (Exception ignored) {
+            // Failure surfaces via the assertions below.
+          } finally {
+            done.countDown();
+          }
+        });
+      }
+      startGate.countDown();
 
-    assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
-    pool.shutdown();
+      assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
+    } finally {
+      shutdownPool(pool);
+    }
 
     long deadline = System.currentTimeMillis() + 3000;
     while (totalCreates.get() < 2 && System.currentTimeMillis() < deadline) {
@@ -609,6 +619,44 @@ public class TestAbfsSessionManager {
   private static SessionCredentials newSession(Instant expiration) {
     return new SessionCredentials(SESSION_ID, SESSION_TOKEN,
         SESSION_KEY, AUTH_TYPE, expiration);
+  }
+
+  /**
+   * Build a fixed-size executor pool whose worker threads are daemons,
+   * so the pool never blocks JVM exit even if a test fails before
+   * calling {@link #shutdownPool}.
+   *
+   * @param size number of worker threads.
+   * @param name label embedded in each thread's name for debugging.
+   * @return a daemon-backed executor pool.
+   */
+  private static ExecutorService daemonPool(final int size,
+      final String name) {
+    final AtomicInteger id = new AtomicInteger();
+    ThreadFactory factory = r -> {
+      Thread t = new Thread(r);
+      t.setDaemon(true);
+      t.setName("session-test-" + name + "-" + id.incrementAndGet());
+      return t;
+    };
+    return Executors.newFixedThreadPool(size, factory);
+  }
+
+  /**
+   * Aggressively shut down an executor pool: interrupt any running
+   * tasks and wait a bounded time for termination. Called from
+   * {@code finally} blocks so it always runs, even after a failed
+   * assertion.
+   *
+   * @param pool the pool to shut down.
+   */
+  private static void shutdownPool(final ExecutorService pool) {
+    pool.shutdownNow();
+    try {
+      pool.awaitTermination(5, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   /**

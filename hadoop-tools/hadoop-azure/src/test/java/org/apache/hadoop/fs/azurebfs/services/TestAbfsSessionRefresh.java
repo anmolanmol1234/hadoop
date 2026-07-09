@@ -17,11 +17,15 @@
  */
 
 package org.apache.hadoop.fs.azurebfs.services;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -56,10 +60,15 @@ import static org.mockito.Mockito.when;
  * not retry non-recoverable failures.
  *
  * <p>All time-sensitive behavior is driven through an injected
- * {@link Clock} so tests are deterministic and fast no wall-clock
+ * {@link Clock} so tests are deterministic and fast  no wall-clock
  * sleeps are required to exercise expiry or refresh windows. Retry
  * tests set the retry interval to zero so tests execute in
  * milliseconds without real sleeps between attempts.
+ *
+ * <p>Complements {@code TestAbfsSessionManager} (state-machine paths),
+ * {@code TestAbfsSessionAuthFallback} (server failure fallback), and
+ * {@code TestAbfsRestOperationSessionAuth} (auth-switch routing).
+ *
  */
 @Timeout(value = 20, unit = TimeUnit.SECONDS)
 public class TestAbfsSessionRefresh {
@@ -98,10 +107,6 @@ public class TestAbfsSessionRefresh {
       mocks.close();
     }
   }
-
-  // =========================================================================
-  // Refresh triggers within skew window
-  // =========================================================================
 
   /**
    * Verify that a request inside the refresh-skew window returns the
@@ -197,10 +202,6 @@ public class TestAbfsSessionRefresh {
     verify(client, times(1)).createSession(any());
   }
 
-  // =========================================================================
-  // Refresh failure handling
-  // =========================================================================
-
   /**
    * Verify that a background refresh failure preserves the still-valid
    * cached session. Callers must continue to observe the cached
@@ -246,7 +247,7 @@ public class TestAbfsSessionRefresh {
     // Wait until the failed refresh is confirmed to have run.
     assertThat(refreshAttempted.await(2, TimeUnit.SECONDS)).isTrue();
 
-    // Cache must still hold the original refresh failure is
+    // Cache must still hold the original  refresh failure is
     // best-effort and must not wipe still-valid credentials.
     SessionKeyCredentials afterFailedRefresh =
         mgr.getSessionCredentials(tracingContext);
@@ -295,7 +296,7 @@ public class TestAbfsSessionRefresh {
 
     mgr.getSessionCredentials(tracingContext);
 
-    // First refresh attempt fails.
+    // First refresh attempt  fails.
     clock.setTo(insideSkew1);
     mgr.getSessionCredentials(tracingContext);
     assertThat(firstRefreshDone.await(2, TimeUnit.SECONDS)).isTrue();
@@ -342,7 +343,7 @@ public class TestAbfsSessionRefresh {
     SessionKeyCredentials first =
         mgr.getSessionCredentials(tracingContext);
 
-    // Fifty requests spanning most of the session's lifetime all
+    // Fifty requests spanning most of the session's lifetime  all
     // must be served from the same cached instance.
     for (int i = 0; i < 50; i++) {
       long stepSeconds = (justBeforeSkew.getEpochSecond()
@@ -366,7 +367,7 @@ public class TestAbfsSessionRefresh {
     verify(client, times(2)).createSession(any());
 
     // After expiry, calls continue to serve the freshly-minted second
-    // session no drift back to the first.
+    // session  no drift back to the first.
     clock.setTo(afterExpiry);
     SessionKeyCredentials afterExpiryCall2 =
         mgr.getSessionCredentials(tracingContext);
@@ -528,10 +529,6 @@ public class TestAbfsSessionRefresh {
         .createSession(any());
   }
 
-  // =========================================================================
-  // Helpers
-  // =========================================================================
-
   private static SessionCredentials newSession(final String token,
       final Instant expiry) {
     return new SessionCredentials("id-" + token, token,
@@ -542,6 +539,47 @@ public class TestAbfsSessionRefresh {
       final int statusCode, final String errorCode, final String message) {
     return new AbfsRestOperationException(statusCode, errorCode, message,
         null /* innerException */);
+  }
+
+  /**
+   * Build a fixed-size executor pool whose worker threads are daemons,
+   * so the pool never blocks JVM exit even if a test fails before
+   * calling {@link #shutdownPool}. Reserved for future concurrent
+   * tests in this class.
+   *
+   * @param size number of worker threads.
+   * @param name label embedded in each thread's name for debugging.
+   * @return a daemon-backed executor pool.
+   */
+  @SuppressWarnings("unused")
+  private static ExecutorService daemonPool(final int size,
+      final String name) {
+    final AtomicInteger id = new AtomicInteger();
+    ThreadFactory factory = r -> {
+      Thread t = new Thread(r);
+      t.setDaemon(true);
+      t.setName("refresh-test-" + name + "-" + id.incrementAndGet());
+      return t;
+    };
+    return Executors.newFixedThreadPool(size, factory);
+  }
+
+  /**
+   * Aggressively shut down an executor pool: interrupt any running
+   * tasks and wait a bounded time for termination. Called from
+   * {@code finally} blocks so it always runs, even after a failed
+   * assertion.
+   *
+   * @param pool the pool to shut down.
+   */
+  @SuppressWarnings("unused")
+  private static void shutdownPool(final ExecutorService pool) {
+    pool.shutdownNow();
+    try {
+      pool.awaitTermination(5, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   /**
