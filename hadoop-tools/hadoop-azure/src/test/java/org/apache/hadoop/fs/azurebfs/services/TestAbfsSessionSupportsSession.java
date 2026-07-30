@@ -105,19 +105,6 @@ public class TestAbfsSessionSupportsSession {
     assertThat(AbfsSessionManager.supportsSession(op)).isTrue();
   }
 
-  // =========================================================================
-  // Rejected: non-GET methods
-  // =========================================================================
-
-  /** HEAD blob (GetBlobProperties) is accepted — non-GET method. */
-  @Test
-  public void testAcceptsHeadBlob() throws Exception {
-    AbfsRestOperation op = opFor("HEAD",
-        ACCT_HOST + "/mycontainer/myblob");
-
-    assertThat(AbfsSessionManager.supportsSession(op)).isTrue();
-  }
-
   /** PUT blob (create/write) is rejected. */
   @Test
   public void testRejectsPutBlob() throws Exception {

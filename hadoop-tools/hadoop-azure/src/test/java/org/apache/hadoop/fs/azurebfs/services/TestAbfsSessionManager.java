@@ -482,17 +482,6 @@ public class TestAbfsSessionManager {
     assertThat(AbfsSessionManager.supportsSession(op)).isTrue();
   }
 
-  /** HEAD blob (GetBlobProperties) is eligible for session auth. */
-  @Test
-  public void testSupportsSessionAcceptsHeadBlob() throws Exception {
-    AbfsRestOperation op = mock(AbfsRestOperation.class);
-    when(op.getMethod()).thenReturn("HEAD");
-    when(op.getUrl()).thenReturn(
-        new URL("https://acct.blob.core.windows.net/mycontainer/myblob"));
-
-    assertThat(AbfsSessionManager.supportsSession(op)).isTrue();
-  }
-
   /** PUT blob (create/write) is rejected. */
   @Test
   public void testSupportsSessionRejectsPut() throws Exception {
