@@ -1236,9 +1236,109 @@ public class TestAbfsSessionRefresh {
     assertThat(AbfsSessionManager.supportsSession(op)).isFalse();
   }
 
-  // =========================================================================
-  // Helpers
-  // =========================================================================
+  /**
+   * Verify that a closed manager stops scheduling background refreshes.
+   * A request entering the refresh-skew window after {@code close()}
+   * must still be served the cached credentials, but must not issue a
+   * further Create Session call.
+   *
+   * @throws Exception on failure of the mocked call chain.
+   */
+  @Test
+  public void testCloseStopsSchedulingRefresh() throws Exception {
+    final Instant t0 = Instant.parse("2026-07-02T10:00:00Z");
+    final Instant expiry = t0.plusSeconds(300);
+    final Instant insideSkew = expiry.minusSeconds(30);
+
+    final AtomicInteger callCount = new AtomicInteger();
+    doAnswer(inv -> {
+      callCount.incrementAndGet();
+      return newSession("token-original", expiry);
+    }).when(client).createSession(any());
+
+    final MutableClock clock = new MutableClock(t0);
+    final AbfsSessionManager mgr = newManager(clock);
+
+    final SessionKeyCredentials original =
+        mgr.getSessionCredentials(tracingContext);
+    assertThat(callCount.get()).isEqualTo(1);
+
+    mgr.close();
+
+    // Enter the refresh-skew window after close.
+    clock.setTo(insideSkew);
+    final SessionKeyCredentials afterClose =
+        mgr.getSessionCredentials(tracingContext);
+
+    // The cache is still valid, so the caller is served rather than
+    // pushed to OAuth.
+    assertThat(afterClose).isSameAs(original);
+
+    // Give a stray background task a chance to land, then confirm none
+    // was scheduled and the guard was not left armed.
+    Thread.sleep(200);
+    assertThat(callCount.get()).isEqualTo(1);
+    assertThat(mgr.isRefreshPendingForTesting()).isFalse();
+    verify(client, times(1)).createSession(any());
+  }
+
+  /**
+   * Verify that {@code close()} is idempotent and does not throw, so it
+   * is safe in a {@code finally} block and safe under a double close
+   * from {@code FileSystem.close()}.
+   *
+   * @throws Exception on failure of the mocked call chain.
+   */
+  @Test
+  public void testCloseIsIdempotent() throws Exception {
+    final Instant expiry = Instant.now().plusSeconds(3600);
+    when(client.createSession(any()))
+        .thenReturn(newSession("token-original", expiry));
+
+    final AbfsSessionManager mgr = newManager();
+    mgr.getSessionCredentials(tracingContext);
+
+    mgr.close();
+    mgr.close();
+
+    verify(client, times(1)).createSession(any());
+  }
+
+  /**
+   * Verify that a closed manager can still mint a session on the
+   * caller's thread once the cache has expired. Close disables only the
+   * background refresh path, so a filesystem closed concurrently with an
+   * in-progress read does not fail that read.
+   *
+   * @throws Exception on failure of the mocked call chain.
+   */
+  @Test
+  public void testCloseDoesNotBlockForegroundCreate() throws Exception {
+    final Instant t0 = Instant.parse("2026-07-02T10:00:00Z");
+    final Instant expiry = t0.plusSeconds(300);
+    final Instant afterExpiry = expiry.plusSeconds(1);
+
+    final AtomicInteger callCount = new AtomicInteger();
+    doAnswer(inv -> callCount.incrementAndGet() == 1
+        ? newSession("token-1", expiry)
+        : newSession("token-2", afterExpiry.plusSeconds(3600)))
+        .when(client).createSession(any());
+
+    final MutableClock clock = new MutableClock(t0);
+    final AbfsSessionManager mgr = newManager(clock);
+
+    mgr.getSessionCredentials(tracingContext);
+    mgr.close();
+
+    // The cache has expired, so this must go to the wire on the
+    // caller's own thread.
+    clock.setTo(afterExpiry);
+    final SessionKeyCredentials afterClose =
+        mgr.getSessionCredentials(tracingContext);
+
+    assertThat(afterClose.getSessionToken()).isEqualTo("token-2");
+    verify(client, times(2)).createSession(any());
+  }
 
   /**
    * Creates a manager backed by the supplied clock and registers it for

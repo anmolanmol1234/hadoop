@@ -91,6 +91,15 @@ public class ITestReadBufferManagerV2 extends AbstractAbfsIntegrationTest {
       int expectedRequests = numFiles // Get Path Status for each file
           + ((int) Math.ceil((double) fileSize / BLOCK_SIZE))
           * numFiles; // Read requests for each file
+      // When session authentication is enabled, the first eligible read
+      // mints a container-scoped session. The session manager coalesces
+      // concurrent requests through a single-flight guard and caches the
+      // result for the lifetime of the AbfsClient, so exactly one extra
+      // Create Session call is made regardless of how many files are
+      // read in parallel.
+      if (fs.getAbfsStore().getAbfsConfiguration().isSessionAuthEnabled()) {
+        expectedRequests += 1;
+      }
       assertEquals(expectedRequests,
           requestsMadeAfterTest - requestsMadeBeforeTest);
     }
@@ -132,6 +141,9 @@ public class ITestReadBufferManagerV2 extends AbstractAbfsIntegrationTest {
       int expectedRequests = numFiles // Get Path Status for each file
           + ((int) Math.ceil(
           (double) fileSize / BLOCK_SIZE)); // Read requests for each file
+      if (fs.getAbfsStore().getAbfsConfiguration().isSessionAuthEnabled()) {
+        expectedRequests += 1;
+      }
       assertEquals(expectedRequests,
           requestsMadeAfterTest - requestsMadeBeforeTest);
     }

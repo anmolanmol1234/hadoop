@@ -378,9 +378,8 @@ public class ITestAzureBlobFileSystemRandomRead extends
     testAlwaysReadBufferSizeConfig(true);
   }
 
-  public void testAlwaysReadBufferSizeConfig(boolean alwaysReadBufferSizeConfigValue)
-      throws Throwable {
-    final AzureBlobFileSystem currentFs = getFileSystem();
+  public void testAlwaysReadBufferSizeConfig(
+      boolean alwaysReadBufferSizeConfigValue) throws Throwable {
     Configuration config = new Configuration(this.getRawConfiguration());
     config.set("fs.azure.readaheadqueue.depth", "0");
     config.set("fs.azure.read.alwaysReadBufferSize",
@@ -399,65 +398,87 @@ public class ITestAzureBlobFileSystemRandomRead extends
 
     TestAbfsInputStream testInputStream = new TestAbfsInputStream();
 
-    AbfsInputStream inputStream = testInputStream.getAbfsInputStream(
+    try (AbfsInputStream inputStream = testInputStream.getAbfsInputStream(
         fs.getAbfsClient(),
         testFile.getName(), ALWAYS_READ_BUFFER_SIZE_TEST_FILE_SIZE, eTag,
         DISABLED_READAHEAD_DEPTH, FOUR_MB,
-        alwaysReadBufferSizeConfigValue, FOUR_MB);
+        alwaysReadBufferSizeConfigValue, FOUR_MB)) {
 
-    long connectionsAtStart = fs.getInstrumentationMap()
-        .get(GET_RESPONSES.getStatName());
+      // When session authentication is enabled, the first session-eligible
+      // read on this client mints a container-scoped session, costing one
+      // extra GET response plus an unpredictable number of received bytes.
+      // Mint it on a throwaway stream before the baseline is captured so
+      // that neither counter is contaminated. The session is cached on the
+      // AbfsClient, so the measured reads below reuse it.
+      //
+      // Note: getPathStatus above is a HEAD, which is not session-eligible,
+      // so it cannot have minted the session already.
+      if (getConfiguration(fs).isSessionAuthEnabled()) {
+        try (FSDataInputStream priming = fs.open(testFile)) {
+          priming.read();
+        }
+      }
 
-    long dateSizeReadStatAtStart = fs.getInstrumentationMap()
-        .get(BYTES_RECEIVED.getStatName());
+      long connectionsAtStart = fs.getInstrumentationMap()
+          .get(GET_RESPONSES.getStatName());
 
-    long newReqCount = 0;
-    long newDataSizeRead = 0;
+      long dataSizeReadStatAtStart = fs.getInstrumentationMap()
+          .get(BYTES_RECEIVED.getStatName());
 
-    byte[] buffer20b = new byte[TWENTY_BYTES];
-    byte[] buffer30b = new byte[THIRTY_BYTES];
-    byte[] byteBuffer5 = new byte[FIVE_BYTES];
+      long newReqCount = 0;
+      long newDataSizeRead = 0;
 
-    // first read
-    // if alwaysReadBufferSize is off, this is a sequential read
-    inputStream.read(byteBuffer5, 0, FIVE_BYTES);
-    newReqCount++;
-    newDataSizeRead += FOUR_MB;
+      byte[] buffer20b = new byte[TWENTY_BYTES];
+      byte[] buffer30b = new byte[THIRTY_BYTES];
+      byte[] byteBuffer5 = new byte[FIVE_BYTES];
 
-    assertAbfsStatistics(GET_RESPONSES, connectionsAtStart + newReqCount,
-        fs.getInstrumentationMap());
-    assertAbfsStatistics(BYTES_RECEIVED,
-        dateSizeReadStatAtStart + newDataSizeRead, fs.getInstrumentationMap());
-
-    // second read beyond that the buffer holds
-    // if alwaysReadBufferSize is off, this is a random read. Reads only
-    // incoming buffer size
-    // else, reads a buffer size
-    inputStream.seek(NINE_MB);
-    inputStream.read(buffer20b, 0, BYTE);
-    newReqCount++;
-    if (alwaysReadBufferSizeConfigValue) {
+      // first read
+      // if alwaysReadBufferSize is off, this is a sequential read
+      inputStream.read(byteBuffer5, 0, FIVE_BYTES);
+      newReqCount++;
       newDataSizeRead += FOUR_MB;
-    } else {
-      newDataSizeRead += TWENTY_BYTES;
-    }
 
-    assertAbfsStatistics(GET_RESPONSES, connectionsAtStart + newReqCount, fs.getInstrumentationMap());
-    assertAbfsStatistics(BYTES_RECEIVED,
-        dateSizeReadStatAtStart + newDataSizeRead, fs.getInstrumentationMap());
+      assertAbfsStatistics(GET_RESPONSES, connectionsAtStart + newReqCount,
+          fs.getInstrumentationMap());
+      assertAbfsStatistics(BYTES_RECEIVED,
+          dataSizeReadStatAtStart + newDataSizeRead,
+          fs.getInstrumentationMap());
 
-    // third read adjacent to second but not exactly sequential.
-    // if alwaysReadBufferSize is off, this is another random read
-    // else second read would have read this too.
-    inputStream.seek(NINE_MB + TWENTY_BYTES + THREE_BYTES);
+      // second read beyond that the buffer holds
+      // if alwaysReadBufferSize is off, this is a random read. Reads only
+      // incoming buffer size
+      // else, reads a buffer size
+      inputStream.seek(NINE_MB);
+      inputStream.read(buffer20b, 0, BYTE);
+      newReqCount++;
+      if (alwaysReadBufferSizeConfigValue) {
+        newDataSizeRead += FOUR_MB;
+      } else {
+        newDataSizeRead += TWENTY_BYTES;
+      }
+
+      assertAbfsStatistics(GET_RESPONSES, connectionsAtStart + newReqCount,
+          fs.getInstrumentationMap());
+      assertAbfsStatistics(BYTES_RECEIVED,
+          dataSizeReadStatAtStart + newDataSizeRead,
+          fs.getInstrumentationMap());
+
+      // third read adjacent to second but not exactly sequential.
+      // if alwaysReadBufferSize is off, this is another random read
+      // else second read would have read this too.
+      inputStream.seek(NINE_MB + TWENTY_BYTES + THREE_BYTES);
       inputStream.read(buffer30b, 0, THREE_BYTES);
       if (!alwaysReadBufferSizeConfigValue) {
         newReqCount++;
         newDataSizeRead += THIRTY_BYTES;
       }
 
-    assertAbfsStatistics(GET_RESPONSES, connectionsAtStart + newReqCount, fs.getInstrumentationMap());
-    assertAbfsStatistics(BYTES_RECEIVED, dateSizeReadStatAtStart + newDataSizeRead, fs.getInstrumentationMap());
+      assertAbfsStatistics(GET_RESPONSES, connectionsAtStart + newReqCount,
+          fs.getInstrumentationMap());
+      assertAbfsStatistics(BYTES_RECEIVED,
+          dataSizeReadStatAtStart + newDataSizeRead,
+          fs.getInstrumentationMap());
+    }
   }
 
   private long sequentialRead(String version,

@@ -254,6 +254,8 @@ public class ITestAbfsNetworkStatistics extends AbstractAbfsIntegrationTest {
     long expectedGetResponses;
     long expectedBytesReceived;
 
+    final boolean sessionAuthEnabled = fs.getAbfsStore().getAbfsConfiguration().isSessionAuthEnabled();
+
     try {
       // Creating a File and writing some bytes in it.
       out = fs.create(getResponsePath);
@@ -266,6 +268,17 @@ public class ITestAbfsNetworkStatistics extends AbstractAbfsIntegrationTest {
       expectedConnectionsMade = metricMap.get(CONNECTIONS_MADE.getStatName());
       expectedGetResponses = metricMap.get(CONNECTIONS_MADE.getStatName());
       expectedBytesReceived = metricMap.get(BYTES_RECEIVED.getStatName());
+
+      // When session authentication is enabled, this read is the first
+      // session-eligible operation on the client, so it mints a
+      // container-scoped session before signing the request:
+      // 1 Create Session request = 1 connection and 1 get response.
+      // The session is cached for the lifetime of the AbfsClient, so no
+      // further Create Session calls are made by this test.
+      if (sessionAuthEnabled) {
+        expectedConnectionsMade++;
+        expectedGetResponses++;
+      }
 
       // --------------------------------------------------------------------
       // Operation: Create AbfsInputStream

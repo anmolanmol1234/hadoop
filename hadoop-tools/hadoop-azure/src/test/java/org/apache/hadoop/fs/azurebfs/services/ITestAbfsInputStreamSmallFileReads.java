@@ -71,6 +71,13 @@ public class ITestAbfsInputStreamSmallFileReads extends
   private void validateNumBackendCalls(final boolean readSmallFilesCompletely,
       final AzureBlobFileSystem fs)
       throws IOException, NoSuchFieldException, IllegalAccessException {
+    // The session is container-scoped and cached on the AbfsClient, so
+    // it is minted by the first session-eligible read on this
+    // filesystem instance and reused by every later iteration.
+
+    boolean sessionPending = fs.getAbfsStore()
+        .getAbfsConfiguration()
+        .isSessionAuthEnabled();
     for (int i = 1; i <= 4; i++) {
       String fileName = methodName.getMethodName() + i;
       int fileSize = i * ONE_MB;
@@ -96,12 +103,18 @@ public class ITestAbfsInputStreamSmallFileReads extends
         metricMap = getInstrumentationMap(fs);
         long requestsMadeAfterTest = metricMap
             .get(CONNECTIONS_MADE.getStatName());
+        long expectedRequests = readSmallFilesCompletely ? 1 : 3;
 
-        if (readSmallFilesCompletely) {
-          assertEquals(1, requestsMadeAfterTest - requestsMadeBeforeTest);
-        } else {
-          assertEquals(3, requestsMadeAfterTest - requestsMadeBeforeTest);
+        // When session authentication is enabled, the first read on
+        // this filesystem instance also issues one Create Session
+        // call before signing the request. Later iterations reuse the
+        // cached session, so the extra call is counted only once.
+        if (sessionPending) {
+          expectedRequests++;
+          sessionPending = false;
         }
+        assertEquals(expectedRequests,
+            requestsMadeAfterTest - requestsMadeBeforeTest);
       }
     }
   }

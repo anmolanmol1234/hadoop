@@ -155,6 +155,11 @@ public class ITestAbfsInputStreamReadFooter extends AbstractAbfsScaleTest {
 
   private void validateNumBackendCalls(final AzureBlobFileSystem spiedFs,
       final boolean optimizeFooterRead, final int fileSize, final Path testFilePath) throws Exception {
+    // The session is container-scoped and cached on the AbfsClient, so
+    // it is minted by the first session-eligible read on this
+    // filesystem instance and reused by every later iteration.
+
+    boolean sessionPending = spiedFs.getAbfsStore().getAbfsConfiguration().isSessionAuthEnabled();
     for (int readBufferSize : READ_BUFFER_SIZE) {
       for (int footerReadBufferSize : FOOTER_READ_BUFFER_SIZE) {
         changeFooterConfigs(spiedFs, optimizeFooterRead, fileSize, readBufferSize);
@@ -183,11 +188,18 @@ public class ITestAbfsInputStreamReadFooter extends AbstractAbfsScaleTest {
           long requestsMadeAfterTest = metricMap
               .get(CONNECTIONS_MADE.getStatName());
 
-          if (optimizeFooterRead) {
-            assertEquals(1, requestsMadeAfterTest - requestsMadeBeforeTest);
-          } else {
-            assertEquals(3, requestsMadeAfterTest - requestsMadeBeforeTest);
+          long expectedRequests = optimizeFooterRead ? 1 : 3;
+
+          // When session authentication is enabled, the first read on
+          // this filesystem instance also issues one Create Session
+          // call before signing the request. Later iterations reuse the
+          // cached session, so the extra call is counted only once.
+          if (sessionPending) {
+            expectedRequests++;
+            sessionPending = false;
           }
+          assertEquals(expectedRequests,
+              requestsMadeAfterTest - requestsMadeBeforeTest);
         }
       }
     }
